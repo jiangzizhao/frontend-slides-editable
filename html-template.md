@@ -300,11 +300,11 @@ Save processed images with `_processed` suffix. Never overwrite originals.
 
 ### Image Placement
 
-**Use direct file paths** (not base64) — presentations are viewed locally:
+**Embed delivery media as data URLs** — generated presentations are sent as one HTML file, so delivered `<img>`, `<video>`, and `<source>` tags must not point at `assets/` paths:
 
 ```html
-<img src="assets/logo_round.png" alt="Logo" class="slide-image logo">
-<img src="assets/screenshot.png" alt="Screenshot" class="slide-image screenshot">
+<img src="data:image/png;base64,..." alt="Logo" class="slide-image logo">
+<img src="data:image/png;base64,..." alt="Screenshot" class="slide-image screenshot">
 ```
 
 ```css
@@ -345,14 +345,14 @@ Save processed images with `_processed` suffix. Never overwrite originals.
 Single presentations:
 ```
 presentation.html    # Self-contained, all CSS/JS inline
-assets/              # Images only, if any
 ```
 
 Multiple presentations in one project:
 ```
 [name].html
-[name]-assets/
 ```
+
+Extraction tools may create a temporary `assets/` folder, but Phase 3 generation must read those files and embed them into the final HTML as `data:` URLs. Do not ship an HTML file that depends on sibling media files.
 
 ---
 
@@ -363,7 +363,7 @@ When using the **frontend-slides-editable** skill, every generated deck **must**
 ### Authoritative references
 
 1. **[editor-runtime.md](editor-runtime.md)** — DOM contract (`section.slide#id`, `.slide-edit-layer`, `[data-slide-object][data-oid]`, `data-object-type`), undo command types, snap rules, generator checklist.
-2. **[examples/editable-deck-reference.html](examples/editable-deck-reference.html)** — Single-file **working implementation**: `SlideDeck` (scroll, snap, dots, progress), `SlideObjectEditor` (edit mode, **Ctrl+click** multi-select, drag + snap guides, RTE toolbar, delete objects), `SlideSidebar` (thumbnails via clone+scale, drag reorder, copy slide, new blank page, delete slide), `HistoryStack`, full-deck localStorage persistence, and sanitized HTML export.
+2. **[examples/editable-deck-reference.html](examples/editable-deck-reference.html)** — Single-file **working implementation**: `SlideDeck` (scroll, snap, dots, progress), `SlideObjectEditor` (edit mode, **Ctrl+click** multi-select, drag + snap guides, RTE toolbar, delete objects), `SlideSidebar` (thumbnails via clone+scale, drag reorder, copy slide, new blank page, delete slide), `HistoryStack`, localStorage draft persistence, File System Access save with download fallback, embedded `#deck-persisted-state`, and sanitized portable HTML export.
 
 ### Integration steps (Phase 3)
 
@@ -374,7 +374,9 @@ When using the **frontend-slides-editable** skill, every generated deck **must**
 5. Wrap all `section.slide` siblings in a container (e.g. `.slides-offset`) if you use `body.deck-sidebar-open .slides-offset { padding-right: … }` so the filmstrip does not cover content.
 6. For each slide, add `.slide-edit-layer` and place all movable blocks as `.slide-object` nodes per **editor-runtime.md** (move + resize handles + text/graphic structure).
 7. Copy **JavaScript** from the reference `<script>` block; keep `STORAGE_KEY` based on `<html data-deck-id="…">` or document title. Persist the whole `.slides-offset` structure, not just individual slide bodies, so reorder/delete survives reload.
-8. Wire **Edit** / **Pages** / **#deckEditChrome** (Done, Undo, Redo) and hotzone using the **JS hover pattern** documented below (no CSS `~` for toggle visibility).
+   - Keep `serializeDeckState()`, `buildStandaloneHtml()`, `#deck-persisted-state`, `showSaveFilePicker`, and `downloadHtml()` intact. Exported files must load the latest edited deck even in a browser with empty localStorage.
+   - If any generated media begins life under `assets/`, convert it to a `data:` URL before writing the HTML.
+8. Wire **Edit** / **Pages** / **Laser** / **Fullscreen** / **#deckEditChrome** (Done, Undo, Redo) and hotzone using the **JS hover pattern** documented below (no CSS `~` for toggle visibility).
 9. Set `data-mobile-adaptation="desktop-default"` on `<html>` unless the required Phase 1 mobile answer says to support phones; then set `enabled` and include portrait + landscape media rules.
 
 ### Regression guard (slide list / filmstrip)
@@ -383,13 +385,15 @@ Thumbnails **clone** full `<section class="slide">` nodes into the sidebar. If t
 
 **Required:** Resolve the deck root once (e.g. `.slides-offset`) and use **`root.querySelectorAll(':scope > section.slide')`** for enumeration, reorder, and save/load. In **`SlideSidebar.refresh()`**, clear `#filmstripList` **before** calling `deck.refreshSlides()`. See [editor-runtime.md](editor-runtime.md) §Deck queries.
 
-**Z-index / layout:** Presets often use **top-left** slide numbers or nav. Nest **`#deckEditChrome`** (Undo / Redo / Done) inside **`#deckLeftHover`** with **Edit** / **Pages** so one hover region reveals the whole cluster; keep `z-index` high enough that it does not sit under decorative layers.
+**Z-index / layout:** Presets often use **top-left** slide numbers or nav. Nest **`#deckEditChrome`** (Undo / Redo / Done) inside **`#deckLeftHover`** with **Edit** / **Pages** / **Laser** / **Fullscreen** so one hover region reveals the whole cluster; keep `z-index` high enough that it does not sit under decorative layers.
 
 ### Inline editing UI (required pattern)
 
 Same hotzone + **400ms** delayed hide as in **§ Hover reveal for edit controls** above. The editable skill **adds**:
 
-- **`#deckLeftHover`** — fixed **top-left** wrapper; hover reveals **Edit**, **Pages**, **`#btnSave`** (edit mode only), and **`#deckEditChrome`** (**Undo**, **Redo**, **Done**) (see reference). No separate bottom-right save bar.
+- **`#deckLeftHover`** — fixed **top-left** wrapper; hover reveals **Edit**, **Pages**, **Laser**, **Fullscreen**, **`#btnSave`** (edit mode only), and **`#deckEditChrome`** (**Undo**, **Redo**, **Done**) (see reference). No separate bottom-right save bar.
+- **`#laserToggle` / `#deckLaserLayer`** — presentation-mode dot-only laser pointer. Export must keep the feature but strip any active laser state; no trail DOM should be created.
+- **`#fullscreenToggle`** — uses `document.documentElement.requestFullscreen()` and `fullscreenchange` to sync active state.
 - **`#pagesToggle`** next to `#editToggle` for the slide sidebar.
 - **`aside.slide-sidebar`** with `#filmstripList` and export control.
 - Thumbnail rows expose a hover/focus **Copy** button (`data-filmstrip-action="copy"`), and the sidebar footer includes **Export HTML** plus **+New Page** (`#btnNewPage`).

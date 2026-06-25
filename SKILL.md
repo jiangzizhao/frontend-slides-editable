@@ -6,7 +6,7 @@ description: Use when the user wants a single-file HTML presentation that stays 
 <objective>
 Frontend Slides (Editable)
 
-Create zero-dependency, animation-rich HTML presentations that run entirely in the browser **with a built-in editor**: move objects, multi-select with **Ctrl+click**, alignment snapping, simple text formatting with **font family + size controls**, **undo/redo**, a **Pages** sidebar (slide thumbnails, drag to reorder, delete), **Ctrl+S** persistence, and **export HTML**.
+Create zero-dependency, animation-rich HTML presentations that run entirely in the browser **with a built-in editor**: move objects, multi-select with **Ctrl+click**, alignment snapping, simple text formatting with **font family + size controls**, **undo/redo**, a **Pages** sidebar (slide thumbnails, drag to reorder, delete), presentation tools (**Laser** pointer and **Fullscreen**), **Ctrl+S** persistence, and **export HTML**.
 
 This skill is a **copy of the `frontend-slides` skill** extended with the editable deck runtime. For read-only decks without editor weight, use the original **`frontend-slides`** skill instead (same skills directory layout).
 </objective>
@@ -39,7 +39,7 @@ Template edit modes:
 
 - `data-template-edit-mode="slots"` is the default. It is template-safe: authored content is editable through slots, while layout and decoration remain locked.
 - `data-template-edit-mode="components"` is an optional generated mode for semantic blocks that can be represented as `[data-slide-object]`.
-- In delivered ported decks, **Unlock layout** componentizes the current slide on demand by creating movable copies of editable slots in `.slide-edit-layer`. The original native template DOM stays in place for fidelity, and the operation is undoable.
+- In delivered ported decks, **Unlock layout** componentizes the current slide on demand by moving/wrapping the original editable slot nodes into `.slide-edit-layer`. It must preserve the original element tag, classes, and computed typography, must not create duplicate content copies, and must be undoable back to the original layout position.
 - Never componentize every DOM node. Exclude backgrounds, grids, axes, ticks, decorative marks, texture/glitch layers, SVG paths, animation wrappers, and pure layout containers.
 
 When using or extending a ported preset:
@@ -116,7 +116,7 @@ Focus on:
 - Backgrounds: Create atmosphere and depth rather than defaulting to solid colors. Layer CSS gradients, use geometric patterns, or add contextual effects that match the overall aesthetic.
 
 Avoid generic AI-generated aesthetics:
-- Overused font families (Inter, Roboto, Arial, system fonts)
+- Overused Latin font families (Inter, Roboto, Arial, bare system defaults) — note a curated **CJK** system stack is the correct portable choice and is not "generic" in this sense (see Phase 3 §Fonts & portability)
 - Cliched color schemes (particularly purple gradients on white backgrounds)
 - Predictable layouts and component patterns
 - Cookie-cutter design that lacks context-specific character
@@ -335,6 +335,7 @@ If images were provided, the slide outline already incorporates them from Step 1
 
 **Key requirements:**
 - Single self-contained HTML file, all CSS/JS inline
+- All authored images and videos must be embedded into the HTML as `data:` URLs by default; `assets/` paths are allowed only as temporary extraction inputs before generation, never as delivered media `src` values.
 - Include the FULL contents of viewport-base.css in the `&lt;style&gt;` block
 - **Preset fidelity:** Implement **Layout** and **Signature Elements** from [STYLE_PRESETS.md](STYLE_PRESETS.md) for the selected style. Vary structure slide-to-slide and preset-to-preset; avoid a **single repeated title-slide prototype** across all aesthetics (parent skill does not do that).
 - **Ported preset fidelity:** For the 34 ported presets, preserve the upstream template DOM/CSS/classes and make authored content slot-editable. Prefer locked native layout + editable `data-edit-slot` content over making every native element draggable.
@@ -342,9 +343,24 @@ If images were provided, the slide outline already incorporates them from Step 1
 - **Deck slide list:** Never use a global `querySelectorAll('section.slide')` when a filmstrip clones slides — use only slides under the deck wrapper (e.g. `.slides-offset` + `:scope > section.slide`). See [html-template.md](html-template.md) §Regression guard.
 - **Mobile adaptation:** If Phase 1 selected phone support, set `data-mobile-adaptation="enabled"` on `<html>` and include portrait + landscape media rules for the deck chrome, sidebar, and slide objects. If not selected, set `data-mobile-adaptation="desktop-default"` so validation can distinguish an explicit desktop-first choice from an omitted decision.
 - Embed the **editable deck runtime** (from the reference example): `SlideDeck`, object editor (select / drag / snap / RTE toolbar), `SlideSidebar`, `HistoryStack`, save/export
-- Use fonts from Fontshare or Google Fonts — never system fonts
+- **Fonts (see §Fonts & portability below):** For **Latin** display/body, prefer distinctive Fontshare or Google Fonts over generic system faces. For **CJK** (Chinese/Japanese/Korean) text, use a curated **system CJK stack** — full CJK webfonts are multi-megabyte and break the single-file/self-contained promise, so a well-chosen native stack is the correct choice here, not "AI slop". Never leave Latin body text on a bare `Arial`/`Inter`/system default just to avoid a link.
 - Add detailed comments explaining each section
 - Every section needs a clear `/* === SECTION NAME === */` comment block
+
+<fonts_portability>
+Fonts & portability (resolve the self-contained promise deliberately)
+
+The exported file must stay **single-file and self-contained — no external font links** (see Phase 5). That constrains font choices; do not ignore it:
+
+- **Latin display/body:** A distinctive Fontshare/Google face is encouraged for character. But a plain `<link rel="stylesheet" href="https://fonts...">` makes the **export depend on the network** — open offline and the type silently falls back. Choose one:
+  1. **Self-host inline** — embed the Latin webfont as base64 `@font-face` `src: url(data:font/woff2;base64,...)` so it travels in the file (best fidelity, larger file), **or**
+  2. **Layered fallback** — link the webfont for the live/edit experience but pair it with a strong same-category system stack so an offline export degrades gracefully, not to bare Arial.
+  The export sanitizer strips leftover external font `<link>`s, so an un-inlined webfont **will** fall back in the delivered file — pick (1) when fidelity matters.
+- **CJK (中文 / 日本語 / 한국어):** Do **not** chase a CJK webfont — full coverage is multiple megabytes and cannot be inlined into a single-file deck. Use a curated **native CJK stack**, e.g.
+  `"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Source Han Sans SC","Noto Sans CJK SC",sans-serif`.
+  This is the correct, portable choice for CJK — not a quality compromise. Latin glyphs in a CJK deck can still use a webfont via an earlier family in the stack.
+- **Mixed CN/EN decks:** Put the Latin display face first, then the CJK stack, so headings get character while CJK body renders in a clean native face: `"Clash Display","PingFang SC",...`.
+</fonts_portability>
 </phase_3_generate_presentation>
 
 <phase_4_ppt_conversion>
@@ -374,14 +390,15 @@ Phase 5: Delivery
 4. **Summarize** — Tell the user:
    - File location, style name, slide count
    - Navigation: Arrow keys, Space, scroll/wheel (wheel disabled while edit mode on), click nav dots
+   - **Presentation tools:** **Hover the top-left** to reveal **Laser** and **Fullscreen**. **Laser** shows a single laser **dot** that follows the pointer (the trailing-stroke effect was removed by design — no trail nodes are created); **Esc** turns it off, and entering edit mode closes it automatically. **Fullscreen** uses the browser Fullscreen API.
    - **Edit mode:** `E` enters edit mode. **Hover the top-left** to reveal **Edit**, **Pages**, and (while editing) **Undo** / **Redo** / **Done**; controls hide after the pointer leaves (~400ms). **Done** (same cluster) exits edit mode — the **Edit** button label stays **Edit**. **Esc** blurs text first, then exits edit mode when not typing in a text box
    - **Pages** sidebar for thumbnails, reorder (drag rows), hover **Copy** on a thumbnail to duplicate that page, delete slides, and use **+New Page** beside **Export HTML** to insert a blank style-matched page after the current slide
    - **Objects:** drag **⠿** to move; hover **×** on an object or use **Delete/Backspace** to remove (multi-select confirms in English); drag **corner resize** on selected objects to change width/height (text reflows); **Ctrl+click** multi-select (macOS: **Control** key)
-   - **Add element:** **Add element** (top-left with Edit/Pages in edit mode) opens a menu: **Text**, **Image** (URL or placeholder), **Video** (URL + controls)
+   - **Add element:** **Add element** (top-left with Edit/Pages in edit mode) opens a menu: **Text**, **Image** (local file, paste, or placeholder), **Video** (local file + controls); added media is embedded as data URLs so exported decks travel as one file
    - **Snap:** aligns to **slide center** and **other objects** — not to the outer slide edges
    - **Text:** click text to type; floating toolbar: **B/I** plus **Font** · **Scale** · **Px** drawers (click to expand cards for families, scale steps, px presets + custom); **Ctrl+Z** / **Ctrl+Y** or **Ctrl+Shift+Z**; **Cmd+Z** / **Cmd+Y** / **Cmd+Shift+Z** on macOS when not typing in `contenteditable`
-   - **Save** (`#btnSave`, top-left next to **Edit** / **Pages** when editing — same hover reveal) or **Ctrl+S** / **Cmd+S** saves the full deck structure to localStorage; **Export HTML** remains in the Pages sidebar and should strip transient edit state
-   - How to customize: slide theme `:root` variables, **`--deck-chrome-*`** for edit UI (see [STYLE_PRESETS.md](STYLE_PRESETS.md) §Deck chrome tokens), font link, `.reveal` animations; keep `data-oid` unique when adding objects
+   - **Save** (`#btnSave`, top-left next to **Edit** / **Pages** when editing — same hover reveal) or **Ctrl+S** / **Cmd+S** stores a browser draft in localStorage and writes a portable HTML file when the browser supports File System Access; otherwise it downloads an updated HTML fallback. **Export HTML** remains in the Pages sidebar and must embed the current deck state plus media into the exported file while stripping transient edit state. The exported file is **portable, single-file, self-contained (no external font links), and trail-free** — it carries the latest edits and keeps Laser/Fullscreen working, but never embeds active laser state.
+   - How to customize: slide theme `:root` variables, **`--deck-chrome-*`** for edit UI (see [STYLE_PRESETS.md](STYLE_PRESETS.md) §Deck chrome tokens), fonts (inline Latin webfonts as base64 `@font-face` or layered system stacks, and a native CJK stack — see Phase 3 §Fonts & portability; the export stays self-contained with no external font links), `.reveal` animations; keep `data-oid` unique when adding objects
 </success_criteria>
 
 <supporting_files>

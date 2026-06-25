@@ -57,7 +57,7 @@ Ported decks must declare `data-template-edit-mode="slots"` or `data-template-ed
 
 - `slots` is the default: native template content uses `data-edit-slot`; the template's layout and decorative DOM stay locked.
 - `components` is an optional generation path for semantic blocks that can safely become `[data-slide-object]`.
-- The runtime's **Unlock layout** action componentizes only the current slide. It creates movable copies of editable slots inside `.slide-edit-layer`, marks them with `data-component-source-slot`, keeps the original template DOM intact, and pushes one undoable history record.
+- The runtime's **Unlock layout** action componentizes only the current slide. It moves/wraps original editable slot nodes inside `.slide-edit-layer`, marks them with `data-component-source-slot`, preserves the original tag/classes/computed typography, avoids duplicate content copies, and pushes one undoable history record that restores the original layout position.
 
 Unlock layout is intentionally not a full-DOM conversion. Decorative layers, layout wrappers, grid/axis/tick marks, SVG internals, texture/glitch layers, and animation helper nodes should stay locked.
 
@@ -97,7 +97,7 @@ Every independently movable / selectable block **must** include a move handle an
   <button type="button" class="slide-object-delete" aria-label="Delete object">×</button>
   <button type="button" class="slide-object-resize" aria-label="Resize"></button>
   <div class="slide-object-graphic">
-    <img src="assets/x.png" alt="" style="max-height:min(40vh,300px);width:100%;object-fit:contain;pointer-events:none;">
+    <img src="data:image/png;base64,..." alt="" style="max-height:min(40vh,300px);width:100%;object-fit:contain;pointer-events:none;">
   </div>
 </div>
 ```
@@ -108,9 +108,11 @@ The snippet uses fixed `px` for brevity; when **generating** new decks, prefer *
 
 ### Top-left control cluster (`#deckLeftHover`)
 
-Controls are grouped in a **fixed top-left** container. **Opacity / pointer-events:** **Edit**, **Pages**, and (in edit mode) **#deckEditChrome** (Undo / Redo / Done) use the same **hover-reveal** pattern: moving the pointer into `#deckLeftHover` adds a `.show` class; `mouseleave` + ~400ms delay removes it (including while edit mode is on), matching the original “corner to reveal” behavior.
+Controls are grouped in a **fixed top-left** container. **Opacity / pointer-events:** **Edit**, **Pages**, **Laser**, **Fullscreen**, and (in edit mode) **#deckEditChrome** (Undo / Redo / Done) use the same **hover-reveal** pattern: moving the pointer into `#deckLeftHover` adds a `.show` class; `mouseleave` + ~400ms delay removes it (including while edit mode is on), matching the original “corner to reveal” behavior.
 
 - **Edit** — enters edit mode only (label stays **Edit**; do not duplicate **Done** on this button).
+- **Laser** — `#laserToggle` toggles a presentation-mode laser pointer. It sets `body.deck-laser-mode`, hides the slide cursor, shows `#deckLaserLayer`, and tracks pointer movement on a single `#laserDot`. The laser is a **dot only** — the trailing-stroke effect was removed by design, so no `.laser-trail-segment` (or any trail) nodes are created at runtime. The dot follows the pointer; entering edit mode or pressing **Esc** while laser mode is active closes it. There is no transient trail state to persist; export never includes active laser state.
+- **Fullscreen** — `#fullscreenToggle` uses `document.documentElement.requestFullscreen()` and listens for `fullscreenchange` to sync button state. Unsupported or blocked fullscreen requests should fail without breaking the deck.
 - **Add element** — `#btnAddElement` (same hover-reveal row as **Save** in edit mode). Opens `#deckAddElementMenu` to insert **Text**, **Image** (local file, paste, or placeholder), or **Video** (local file) on the **current** slide with undo support.
 - **Done** — only on `#deckEditChrome`; exits edit mode.
 - **Undo** / **Redo** — icon buttons, `disabled` when stack empty; `HistoryStack` notifies via `onChange` callback.
@@ -163,6 +165,8 @@ The reference implementation uses a **command stack** with `undo()` / `redo()` a
 |--------|---------|
 | Toggle edit mode | `E` (not while typing in `contenteditable`), or hotzone / **Edit** button |
 | Exit edit mode | **Done** in `#deckEditChrome` (top-left, hover-revealed), **Esc** (first Esc blurs focused text; Esc again exits), or **E** to toggle off |
+| Laser pointer | **Laser** button in `#deckLeftHover`; **Esc** turns it off when not editing |
+| Fullscreen | **Fullscreen** button in `#deckLeftHover`; uses the browser Fullscreen API |
 | Multi-select toggle | `Ctrl` + click object (macOS: **Control** key, not Cmd) |
 | Single select | Click object without Ctrl |
 | Clear selection | Click slide background (empty area) |
@@ -172,8 +176,8 @@ The reference implementation uses a **command stack** with `undo()` / `redo()` a
 | Undo / Redo | **Buttons** in `#deckEditChrome` (hover top-left cluster); or `Ctrl+Z` / **`Ctrl+Y` or `Ctrl+Shift+Z`** when edit mode and not typing in `contenteditable`; macOS **`Cmd+Z`**, **`Cmd+Shift+Z`**, **`Cmd+Y`** |
 | Save | **Save** button in `#deckLeftHover` (row with Edit/Pages, edit mode only, hover-revealed) or `Ctrl+S` / **Cmd+S** |
 | Bold / italic / font / size | Floating `#rteToolbar` when text is focused |
-| Save to localStorage | `Ctrl+S` saves the full `.slides-offset` structure, not just per-slide inner HTML |
-| Export HTML | Sidebar button in reference; export should strip edit-mode / selected-state classes |
+| Save to localStorage + file | `Ctrl+S` saves the full `.slides-offset` structure as a browser draft, then writes a portable HTML file via File System Access when available or downloads a fallback HTML |
+| Export HTML | Sidebar button in reference; export strips edit-mode / selected-state classes and embeds the current deck state in `#deck-persisted-state` |
 | Copy slide | Hover a Pages thumbnail, click **Copy**; insert the duplicate immediately after that slide, regenerate slide ids / duplicate object ids, and make the operation undoable |
 | New Page | Sidebar **+New Page** button beside **Export HTML**; insert a blank preset-matched page after the current slide, using the current slide’s background/style skeleton where possible |
 | Delete slide | Pages filmstrip **×** — confirms with `Delete slide?`; at least one slide must remain (`Keep at least one slide.`) |
@@ -191,8 +195,9 @@ The reference implementation uses a **command stack** with `undo()` / `redo()` a
 4. Include full `viewport-base.css` in `<style>`.
 5. Define **slide theme** and **`--deck-chrome-*`** on `:root`; chrome CSS uses variables only.
 6. Copy **deck runtime** from `examples/editable-deck-reference.html` (CSS + JS) or inline equivalent — keep `STORAGE_KEY` / deck id meta consistent if user needs multiple files.
-7. After generating, verify at 1280×720: no slide overflow, handles visible only in edit mode.
-8. Set `<html data-mobile-adaptation="desktop-default">` unless Phase 1 explicitly selected phone support; for phone support set `enabled` and include portrait + landscape media rules from the reference runtime.
+7. Keep `serializeDeckState()`, `buildStandaloneHtml()`, `#deck-persisted-state`, File System Access save, and download fallback intact. The exported file is **portable, single-file, and self-contained** (no external font links) and carries the latest edited deck even with empty localStorage in another browser. It retains Laser/Fullscreen functionality but is **trail-free** and never embeds active laser state (the dot-only laser creates no trail nodes to strip).
+8. After generating, verify at 1280×720: no slide overflow, handles visible only in edit mode.
+9. Set `<html data-mobile-adaptation="desktop-default">` unless Phase 1 explicitly selected phone support; for phone support set `enabled` and include portrait + landscape media rules from the reference runtime.
 
 ## Files
 

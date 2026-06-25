@@ -174,6 +174,12 @@ def validate_source(path: Path, source: str, errors: list[str], *, generated: bo
         "slide id normalizer": "renumberDeckSlides",
         "object id normalizer": "renumberDeckObjects",
         "blank slide factory": "createBlankSlideFromPreset",
+        "laser button": "id=\"laserToggle\"",
+        "laser layer": "id=\"deckLaserLayer\"",
+        "laser runtime": "class LaserPointerController",
+        "fullscreen button": "id=\"fullscreenToggle\"",
+        "fullscreen API": "requestFullscreen",
+        "fullscreen state listener": "fullscreenchange",
         "mobile adaptation marker": "data-mobile-adaptation",
         "mobile portrait css": "@media (max-width: 700px) and (orientation: portrait)",
         "mobile landscape css": "@media (max-height: 500px) and (orientation: landscape)",
@@ -188,6 +194,18 @@ def validate_source(path: Path, source: str, errors: list[str], *, generated: bo
         fail(errors, rel, "missing sanitizeExportDocument()")
     if "localStorage.setItem" not in source:
         fail(errors, rel, "missing localStorage save path")
+    portable_tokens = {
+        "embedded persisted state": "deck-persisted-state",
+        "deck state serializer": "function serializeDeckState",
+        "standalone HTML builder": "function buildStandaloneHtml",
+        "filesystem save picker": "showSaveFilePicker",
+        "download fallback": "function downloadHtml",
+    }
+    for label, token in portable_tokens.items():
+        if token not in source:
+            fail(errors, rel, f"missing {label}")
+    if re.search(r"<(?:img|video|source)\b[^>]*\bsrc=[\"']assets/", source, flags=re.I):
+        fail(errors, rel, "media src uses non-portable assets/ path")
     if generated:
         if "data-ported-template=" in source and template_edit_mode(source) not in TEMPLATE_EDIT_MODES:
             fail(errors, rel, "missing or invalid data-template-edit-mode")

@@ -878,35 +878,51 @@
     box-sizing: border-box;
     overflow: hidden !important;
   }
-  /* === VIEWPORT CONTENT CONSTRAINTS === */
-  /* Upstream templates use fixed px font sizes designed for scrollable pages.
-     Inside a 100vh slide, cap the largest text to viewport-relative sizes. */
+  /* === VIEWPORT CONTENT CONSTRAINTS (temperate caps) === */
+  /* Upstream templates use fixed px font sizes (200-600px) designed for tall,
+     scrollable pages. Inside a 100vh / 1280x720 measure slide those overflow.
+     These caps only ever SHRINK extreme display type via a vw ceiling; we do
+     NOT raise line-heights (raising them grows stacked columns, which is the
+     dominant overflow cause) and we keep selectors to heading tags + the exact
+     oversized display/script/mark classes the failing presets use. The vw-only
+     ceilings (min of a rem floor and a vw cap) leave already-responsive type
+     untouched on the 1280px measure viewport and pull only the giant fixed-px
+     headings back. Rules sit after the template <style> and use ID+class
+     specificity + !important to win over template heading selectors. */
   #deck.slides-offset > section.slide h1 {
-    font-size: clamp(1.5rem, 5vw, 4rem) !important;
-    line-height: 1.1 !important;
+    font-size: min(4rem, 5.6vw) !important;
+    line-height: 1.08 !important;
   }
   #deck.slides-offset > section.slide h2 {
-    font-size: clamp(1.2rem, 3.5vw, 2.5rem) !important;
+    font-size: min(2.5rem, 4vw) !important;
   }
   #deck.slides-offset > section.slide h3 {
-    font-size: clamp(1rem, 2.5vw, 1.75rem) !important;
+    font-size: min(1.75rem, 2.6vw) !important;
   }
-  /* Cap oversized display/number classes (upstream uses 200-600px fixed sizes) */
+  /* Oversized display / numeric figures (upstream 100-600px fixed sizes).
+     Class families matched exactly (not as substrings) so small labels such as
+     .num-label / .num-desc are not swept up. */
   #deck.slides-offset > section.slide .num,
   #deck.slides-offset > section.slide .big,
   #deck.slides-offset > section.slide .huge,
   #deck.slides-offset > section.slide .giant,
-  #deck.slides-offset > section.slide [class*="numeral"],
+  #deck.slides-offset > section.slide .figure,
+  #deck.slides-offset > section.slide .numeral,
   #deck.slides-offset > section.slide .title:not(h1):not(h2):not(h3) {
-    font-size: min(var(--title-size, 4rem), 8vw) !important;
+    font-size: min(var(--title-size, 4rem), 7.5vw) !important;
     line-height: 1 !important;
   }
-  /* Cap decorative oversized marks (quote marks, punctuation) */
-  #deck.slides-offset > section.slide .marks,
-  #deck.slides-offset > section.slide .qmark,
+  /* Extreme hero / script display sizes (300-600px) get a tighter vw ceiling
+     so a single giant glyph cannot exceed the slide height. */
   #deck.slides-offset > section.slide .script.huge,
-  #deck.slides-offset > section.slide .script.giant {
-    font-size: min(6rem, 10vw) !important;
+  #deck.slides-offset > section.slide .script.giant,
+  #deck.slides-offset > section.slide .script.large {
+    font-size: min(7.5rem, 11vw) !important;
+  }
+  /* Decorative oversized marks (quote marks, punctuation). */
+  #deck.slides-offset > section.slide .marks,
+  #deck.slides-offset > section.slide .qmark {
+    font-size: min(6.5rem, 10vw) !important;
   }
   /* Note: slide overflow: hidden already clips content that exceeds 100vh.
      We do NOT add max-height on children — it interferes with flex layout
@@ -933,6 +949,20 @@
     inset: auto !important;
   }
   .filmstrip-thumb-host .slide-edit-layer {
+    pointer-events: none !important;
+  }
+  /* In edit mode, template navigation/progress decoration (often fixed and
+     high z-index — e.g. .nav-dots at z-index:8000) can overlay the slide and
+     swallow clicks meant for draggable objects/handles. Lift the edit layer
+     above it and stop the decoration from intercepting pointer events while
+     editing, so move/resize handles are reachable. */
+  body.deck-edit-mode .slide-edit-layer {
+    z-index: 9000 !important;
+  }
+  body.deck-edit-mode .nav-dots,
+  body.deck-edit-mode .progress-bar,
+  body.deck-edit-mode #navDots,
+  body.deck-edit-mode #progressBar {
     pointer-events: none !important;
   }
   .static-chart-replacement {
@@ -1085,7 +1115,7 @@
     }
     .deck-edit-chrome svg { width: 18px; height: 18px; fill: currentColor; }
 
-    .edit-toggle, .sidebar-pages-toggle, .deck-btn-save, .deck-btn-add {
+    .edit-toggle, .sidebar-pages-toggle, .deck-btn-save, .deck-btn-add, .deck-btn-present {
       position: relative;
       z-index: 10001;
       border: 1px solid var(--deck-chrome-border);
@@ -1103,8 +1133,14 @@
       justify-content: center;
     }
     .edit-toggle.show, .edit-toggle.active, .sidebar-pages-toggle.show, .sidebar-pages-toggle.active,
+    .deck-btn-present.show, .deck-btn-present.active,
     body.deck-edit-mode .deck-btn-save.show,
     body.deck-edit-mode .deck-btn-add.show { opacity: 1; pointer-events: auto; }
+    .deck-btn-present.active {
+      border-color: color-mix(in srgb, var(--deck-chrome-accent) 70%, var(--deck-chrome-border));
+      background: color-mix(in srgb, var(--deck-chrome-accent) 20%, var(--deck-chrome-bg));
+    }
+    .deck-btn-present.is-fullscreen-hidden { display: none !important; }
 
     .deck-add-element-menu {
       position: fixed;
@@ -1311,7 +1347,7 @@
     body.deck-edit-mode .slide-object.is-selected [data-resize-handle] { display: block; }
 
     .slide-object-text {
-      min-height: 1.2em; outline: none; font-size: var(--body-size);
+      min-height: 1.2em; outline: none;
       width: 100%; box-sizing: border-box;
       overflow-wrap: anywhere; word-break: break-word;
     }
@@ -1367,6 +1403,45 @@
     }
     .snap-line-v { width: 1px; top: 0; bottom: 0; }
     .snap-line-h { height: 1px; left: 0; right: 0; }
+
+    /* === presentation laser pointer === */
+    .deck-laser-layer {
+      position: fixed;
+      inset: 0;
+      z-index: 9300;
+      pointer-events: none;
+      overflow: hidden;
+      opacity: 0;
+      transition: opacity 0.12s ease;
+    }
+    body.deck-laser-mode .deck-laser-layer {
+      opacity: 1;
+    }
+    body.deck-laser-mode .slides-offset,
+    body.deck-laser-mode .slide {
+      cursor: none;
+    }
+    .laser-dot {
+      position: fixed;
+      left: 0;
+      top: 0;
+      width: 18px;
+      height: 18px;
+      border-radius: 999px;
+      opacity: 0;
+      transform: translate(-999px, -999px);
+      background:
+        radial-gradient(circle, #fff 0 14%, #ff3b6b 15% 44%, rgba(255, 59, 107, 0.25) 45% 72%, transparent 73%);
+      box-shadow:
+        0 0 10px rgba(255, 255, 255, 0.85),
+        0 0 22px rgba(255, 59, 107, 0.95),
+        0 0 46px rgba(255, 59, 107, 0.45);
+      mix-blend-mode: screen;
+      will-change: transform, opacity;
+    }
+    body.deck-laser-mode .laser-dot {
+      opacity: 1;
+    }
 
     /* === RTE toolbar === */
     .rte-toolbar {
@@ -1468,6 +1543,8 @@
   <div class="deck-left-row">
     <button type="button" class="edit-toggle" id="editToggle" title="Edit mode (E) — hover this corner to show">Edit</button>
     <button type="button" class="sidebar-pages-toggle" id="pagesToggle" title="Pages sidebar">Pages</button>
+    <button type="button" class="deck-btn-present" id="laserToggle" title="Laser pointer">Laser</button>
+    <button type="button" class="deck-btn-present" id="fullscreenToggle" title="Enter fullscreen">Fullscreen</button>
     <button type="button" class="deck-btn-save" id="btnSave" title="Save layout to browser (Ctrl+S)">Save</button>
     <button type="button" class="deck-btn-add" id="btnAddElement" title="Add text, image, or video to current slide">Add element</button>
     <button type="button" class="deck-btn-add" id="btnUnlockLayout" title="Convert this slide's editable content into movable components">Unlock layout</button>
@@ -1491,6 +1568,9 @@
 
 <div class="progress-bar" id="progressBar"></div>
 <nav class="nav-dots" id="navDots" aria-label="Slides"></nav>
+<div class="deck-laser-layer" id="deckLaserLayer" aria-hidden="true">
+  <div class="laser-dot" id="laserDot"></div>
+</div>
 
 <aside class="slide-sidebar" id="slideSidebar" aria-label="Slide pages">
   <h3>Slides</h3>
@@ -1557,7 +1637,7 @@
           Strategy · Presentation
         </div>
         <!-- Watermark number: near-invisible serif "01" in background -->
-        <div class="grove-num" data-edit-slot="s0-slot-5" data-slot-type="metric" data-slot-label="01" data-slot-locked-layout="true">01</div>
+        <div class="grove-num" data-edit-slot="s0-slot-5" data-bounds-exempt="decorative off-canvas page-number watermark" data-slot-type="metric" data-slot-label="01" data-slot-locked-layout="true">01</div>
 
         <!-- Main content: grows to fill, centers vertically -->
         <div
@@ -1620,7 +1700,7 @@
 
 <section class="slide dark slide--chapter" id="slide-1" data-template-slide-index="2">
         <!-- Watermark: massive near-invisible "01" in background -->
-        <div class="grove-num" data-edit-slot="s1-slot-2" data-slot-type="metric" data-slot-label="01" data-slot-locked-layout="true">01</div>
+        <div class="grove-num" data-edit-slot="s1-slot-2" data-bounds-exempt="decorative off-canvas page-number watermark" data-slot-type="metric" data-slot-label="01" data-slot-locked-layout="true">01</div>
         <!-- Section kicker: "01 / CONTEXT" in mono coral -->
         <div class="chapter-num" data-anim="fade-in" data-delay="0" data-edit-slot="s1-slot-3" data-slot-type="metric" data-slot-label="01 / Context" data-slot-locked-layout="true">
           01 / Context
@@ -1973,7 +2053,7 @@
 
 <section class="slide dark slide--chapter" id="slide-8" data-template-slide-index="9">
         <!-- Watermark: massive near-invisible "02" -->
-        <div class="grove-num" data-edit-slot="s8-slot-2" data-slot-type="metric" data-slot-label="02" data-slot-locked-layout="true">02</div>
+        <div class="grove-num" data-edit-slot="s8-slot-2" data-bounds-exempt="decorative off-canvas page-number watermark" data-slot-type="metric" data-slot-label="02" data-slot-locked-layout="true">02</div>
         <div class="chapter-num" data-anim="fade-in" data-delay="0" data-edit-slot="s8-slot-3" data-slot-type="metric" data-slot-label="02 / Recommendation" data-slot-locked-layout="true">
           02 / Recommendation
         </div>
@@ -2125,7 +2205,7 @@
 
 <section class="slide dark slide--end" id="slide-11" data-template-slide-index="12">
         <!-- Watermark number in the background -->
-        <div class="grove-num" data-edit-slot="s11-slot-3" data-slot-type="metric" data-slot-label="12" data-slot-locked-layout="true">12</div>
+        <div class="grove-num" data-edit-slot="s11-slot-3" data-bounds-exempt="decorative off-canvas page-number watermark" data-slot-type="metric" data-slot-label="12" data-slot-locked-layout="true">12</div>
 
         <!-- Organization kicker -->
         <div class="kicker" data-anim="fade-in" data-delay="0" data-edit-slot="s11-slot-4" data-slot-type="text" data-slot-label="[Organization]" data-slot-locked-layout="true">
@@ -2176,6 +2256,9 @@
   const SNAP_PX = 8;
   const MAX_HISTORY = 60;
   const RESIZE_MIN_FRAC = 0.05;
+  const PERSISTED_STATE_ID = 'deck-persisted-state';
+  let currentDeckRevision = 0;
+  let deckFileHandle = null;
 
   function prefersReducedMotion() {
     return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -2185,6 +2268,7 @@
     if (!node || !node.closest) return false;
     return !!(node.closest('#deckEditChrome') || node.closest('#rteToolbar') || node.closest('#slideSidebar') ||
       node.closest('#deckAddElementMenu') || node.closest('#btnAddElement') || node.closest('#btnUnlockLayout') ||
+      node.closest('#laserToggle') || node.closest('#fullscreenToggle') ||
       node.closest('.deck-edit-chrome') || node.closest('#slotImageInput') || node.closest('[data-deck-chrome-surface]'));
   }
 
@@ -2195,6 +2279,18 @@
 
   function deckRoot() {
     return document.querySelector('.slides-offset');
+  }
+
+  function ensureSlideEditLayer(slide) {
+    if (!slide) return null;
+    let layer = slide.querySelector(':scope > .slide-edit-layer');
+    if (!layer) {
+      layer = document.createElement('div');
+      layer.className = 'slide-edit-layer';
+      layer.setAttribute('aria-hidden', 'true');
+      slide.appendChild(layer);
+    }
+    return layer;
   }
 
   function renumberDeckSlides(root) {
@@ -3203,10 +3299,13 @@
       }
       const snapshots = list.map((el) => {
         const slideSec = el.closest('section.slide');
+        const parent = el.parentNode;
         return {
+          node: el,
+          parent,
+          nextSibling: el.nextSibling,
           slideId: slideSec ? slideSec.id : '',
-          oid: el.getAttribute('data-oid') || '',
-          html: el.outerHTML
+          oid: el.getAttribute('data-oid') || ''
         };
       });
       list.forEach((el) => el.remove());
@@ -3214,19 +3313,25 @@
       this.history.push({
         undo: () => {
           snapshots.forEach((s) => {
+            if (!s.node) return;
+            const parent = (s.parent && s.parent.isConnected) ? s.parent : null;
             const slideSec = this._deckSlideById(s.slideId);
-            if (!slideSec) return;
-            const layer = slideSec.querySelector('.slide-edit-layer');
+            const layer = parent || (slideSec && ensureSlideEditLayer(slideSec));
             if (!layer) return;
-            const tpl = document.createElement('template');
-            tpl.innerHTML = s.html.trim();
-            const node = tpl.content.firstElementChild;
-            if (node) layer.appendChild(node);
+            if (s.nextSibling && s.nextSibling.parentNode === layer) {
+              layer.insertBefore(s.node, s.nextSibling);
+            } else {
+              layer.appendChild(s.node);
+            }
           });
           ensureObjectControls(document);
         },
         redo: () => {
           snapshots.forEach((s) => {
+            if (s.node && s.node.parentNode) {
+              s.node.parentNode.removeChild(s.node);
+              return;
+            }
             const slideSec = this._deckSlideById(s.slideId);
             if (!slideSec || !s.oid) return;
             const safe = s.oid.replace(/"/g, '');
@@ -3727,14 +3832,342 @@
     return clone.innerHTML;
   }
 
+  function nextDeckRevision() {
+    const now = Date.now();
+    currentDeckRevision = Math.max(now, currentDeckRevision + 1);
+    return currentDeckRevision;
+  }
+
+  function serializeDeckState(root, revision) {
+    const rev = revision || nextDeckRevision();
+    return {
+      v: 3,
+      revision: rev,
+      updatedAt: new Date(rev).toISOString(),
+      deckHtml: serializeSlidesRoot(root || deckRoot() || document.body)
+    };
+  }
+
+  function parseDeckState(raw) {
+    if (!raw) return null;
+    try {
+      const data = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      if (!data || typeof data !== 'object') return null;
+      if (typeof data.deckHtml === 'string') return data;
+      if (Array.isArray(data.slides)) return data;
+    } catch (e) { console.warn(e); }
+    return null;
+  }
+
+  function readEmbeddedDeckState(docEl) {
+    const host = (docEl || document).querySelector('#' + PERSISTED_STATE_ID);
+    return host ? parseDeckState(host.textContent || '') : null;
+  }
+
+  function stateFreshness(data) {
+    if (!data) return -1;
+    const revision = Number(data.revision || 0);
+    if (Number.isFinite(revision) && revision > 0) return revision;
+    const updated = Date.parse(data.updatedAt || '');
+    return Number.isFinite(updated) ? updated : 0;
+  }
+
+  function newestDeckState(a, b) {
+    return stateFreshness(a) >= stateFreshness(b) ? a : b;
+  }
+
+  function applyDeckState(data) {
+    if (!data) return false;
+    const parent = deckRoot() || document.body;
+    if (typeof data.deckHtml === 'string') {
+      parent.innerHTML = data.deckHtml;
+    } else if (Array.isArray(data.slides)) {
+      const map = {};
+      Array.from(parent.querySelectorAll(':scope > section.slide')).forEach((s) => { map[s.id] = s; });
+      data.slides.forEach((entry) => {
+        const el = map[entry.id];
+        if (el) el.innerHTML = entry.html;
+      });
+    } else return false;
+    currentDeckRevision = Math.max(currentDeckRevision, stateFreshness(data));
+    ensureObjectControls(document);
+    deck.refreshSlides();
+    deck._syncCurrentFromScroll();
+    deck._updateChrome();
+    return true;
+  }
+
+  function upsertEmbeddedDeckState(docEl, data) {
+    const body = docEl.querySelector('body') || docEl;
+    let stateEl = docEl.querySelector('#' + PERSISTED_STATE_ID);
+    if (!stateEl) {
+      stateEl = document.createElement('script');
+      stateEl.type = 'application/json';
+      stateEl.id = PERSISTED_STATE_ID;
+      const firstRuntimeScript = body.querySelector('script');
+      if (firstRuntimeScript && firstRuntimeScript.parentNode) {
+        firstRuntimeScript.parentNode.insertBefore(stateEl, firstRuntimeScript);
+      } else {
+        body.appendChild(stateEl);
+      }
+    }
+    stateEl.textContent = JSON.stringify(data).replace(/</g, '\\u003c');
+  }
+
+  function blobToDataUrl(blob) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = () => reject(reader.error || new Error('Unable to read media file'));
+      reader.readAsDataURL(blob);
+    });
+  }
+
+  async function inlineExternalMediaInClone(docEl) {
+    const warnings = [];
+    const nodes = Array.from(docEl.querySelectorAll('img[src], video[src], source[src]'));
+    for (const node of nodes) {
+      const src = node.getAttribute('src') || '';
+      if (!src || src.startsWith('data:') || src.startsWith('#')) continue;
+      try {
+        const absolute = new URL(src, document.baseURI).href;
+        const res = await fetch(absolute);
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        node.setAttribute('src', await blobToDataUrl(await res.blob()));
+      } catch (e) {
+        warnings.push(src);
+        node.setAttribute('data-portable-warning', 'media-not-inlined');
+      }
+    }
+    return warnings;
+  }
+
+  async function inlineExternalFontsInClone(docEl) {
+    // Honor the self-contained promise: turn external font <link>s into inline
+    // @font-face with data: URLs when reachable; otherwise drop the link so the
+    // export falls back to the layered system stack instead of a dead network ref.
+    const warnings = [];
+    const links = Array.from(docEl.querySelectorAll('link[rel~="stylesheet"], link[rel="preconnect"], link[rel="dns-prefetch"]'));
+    for (const link of links) {
+      const href = link.getAttribute('href') || '';
+      const isExternal = /^https?:\/\//i.test(href) || href.startsWith('//');
+      if (!isExternal) continue;
+      if (link.rel !== 'stylesheet') { link.remove(); continue; } // preconnect/dns-prefetch carry no glyphs
+      try {
+        const cssRes = await fetch(new URL(href, document.baseURI).href);
+        if (!cssRes.ok) throw new Error('HTTP ' + cssRes.status);
+        let css = await cssRes.text();
+        const urls = Array.from(new Set((css.match(/url\(([^)]+)\)/g) || []).map((m) => m.slice(4, -1).replace(/["']/g, '').trim())));
+        for (const u of urls) {
+          if (!u || u.startsWith('data:')) continue;
+          try {
+            const fontRes = await fetch(new URL(u, href).href);
+            if (!fontRes.ok) throw new Error('HTTP ' + fontRes.status);
+            const dataUrl = await blobToDataUrl(await fontRes.blob());
+            css = css.split(u).join(dataUrl);
+          } catch (e) {
+            warnings.push(u);
+          }
+        }
+        const style = docEl.ownerDocument.createElement('style');
+        style.setAttribute('data-inlined-font-src', href);
+        style.textContent = css;
+        link.replaceWith(style);
+      } catch (e) {
+        warnings.push(href);
+        link.remove();
+      }
+    }
+    return warnings;
+  }
+
+  function sanitizeLaserState(root) {
+    if (!root || !root.querySelectorAll) return;
+    const body = root.querySelector && root.querySelector('body');
+    if (body) body.classList.remove('deck-laser-mode');
+    const dot = root.querySelector('#laserDot');
+    if (dot) {
+      dot.style.transform = '';
+      dot.style.opacity = '';
+    }
+  }
+
+  class LaserPointerController {
+    constructor(button) {
+      this.button = button;
+      this.layer = document.getElementById('deckLaserLayer');
+      this.dot = document.getElementById('laserDot');
+      this.active = false;
+      this._onMove = this._onMove.bind(this);
+    }
+
+    bind() {
+      if (!this.button || !this.layer || !this.dot) return;
+      this.button.addEventListener('click', (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        if (document.body.classList.contains('deck-edit-mode')) return;
+        this.toggle();
+      });
+      document.addEventListener('pointermove', this._onMove, true);
+    }
+
+    toggle() {
+      this.setActive(!this.active);
+    }
+
+    setActive(on) {
+      const next = !!on && !document.body.classList.contains('deck-edit-mode');
+      this.active = next;
+      document.body.classList.toggle('deck-laser-mode', next);
+      if (this.button) this.button.classList.toggle('active', next);
+      if (!next) this.clear();
+    }
+
+    clear() {
+      if (this.dot) {
+        this.dot.style.transform = 'translate(-999px, -999px)';
+        this.dot.style.opacity = '';
+      }
+    }
+
+    _point(ev) {
+      return { x: ev.clientX, y: ev.clientY };
+    }
+
+    _showDot(point) {
+      if (!this.dot) return;
+      this.dot.style.transform = 'translate(' + (point.x - 9) + 'px, ' + (point.y - 9) + 'px)';
+    }
+
+    _onMove(ev) {
+      if (!this.active) return;
+      const point = this._point(ev);
+      this._showDot(point);
+    }
+  }
+
+  class FullscreenController {
+    constructor(button) {
+      this.button = button;
+      this._sync = this._sync.bind(this);
+    }
+
+    bind() {
+      if (!this.button) return;
+      this.button.addEventListener('click', (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        this.toggle();
+      });
+      document.addEventListener('fullscreenchange', this._sync);
+      document.addEventListener('webkitfullscreenchange', this._sync);
+      this._sync();
+    }
+
+    fullscreenElement() {
+      return document.fullscreenElement || document.webkitFullscreenElement || null;
+    }
+
+    toggle() {
+      const root = document.documentElement;
+      try {
+        if (this.fullscreenElement()) {
+          const exit = document.exitFullscreen || document.webkitExitFullscreen;
+          if (typeof exit === 'function') Promise.resolve(exit.call(document)).catch(() => {});
+          return;
+        }
+        const request = root.requestFullscreen || root.webkitRequestFullscreen;
+        if (typeof request === 'function') Promise.resolve(request.call(root)).catch(() => {});
+      } catch (_) {}
+    }
+
+    _sync() {
+      if (!this.button) return;
+      const active = !!this.fullscreenElement();
+      this.button.classList.toggle('active', active);
+      this.button.classList.toggle('is-fullscreen-hidden', active);
+      this.button.setAttribute('aria-pressed', active ? 'true' : 'false');
+      this.button.title = active ? 'Exit fullscreen' : 'Enter fullscreen';
+    }
+  }
+
+  async function buildStandaloneHtml(seedState) {
+    const clone = document.documentElement.cloneNode(true);
+    sanitizeExportDocument(clone);
+    const warnings = await inlineExternalMediaInClone(clone);
+    const fontWarnings = await inlineExternalFontsInClone(clone);
+    if (fontWarnings.length) warnings.push(...fontWarnings);
+    const cloneRoot = clone.querySelector('.slides-offset') || clone.querySelector('body') || clone;
+    const state = {
+      ...(seedState || {}),
+      v: 3,
+      revision: seedState && seedState.revision ? seedState.revision : nextDeckRevision(),
+      updatedAt: seedState && seedState.updatedAt ? seedState.updatedAt : new Date(currentDeckRevision).toISOString(),
+      deckHtml: serializeSlidesRoot(cloneRoot)
+    };
+    upsertEmbeddedDeckState(clone, state);
+    return {
+      html: '<!DOCTYPE html>\n' + clone.outerHTML,
+      warnings,
+      state
+    };
+  }
+
+  function downloadHtml(html, filename) {
+    const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = filename || ((document.title || 'deck') + '.html');
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+
+  function requestDeckFileHandle() {
+    const picker = window.showSaveFilePicker;
+    if (typeof picker !== 'function' || deckFileHandle) return null;
+    return picker({
+      suggestedName: (document.title || 'deck') + '.html',
+      types: [{ description: 'HTML file', accept: { 'text/html': ['.html', '.htm'] } }]
+    }).then((handle) => {
+      deckFileHandle = handle;
+      return handle;
+    }).catch((e) => ({ error: e }));
+  }
+
+  async function writeStandaloneHtml(html, pendingHandle) {
+    if (typeof window.showSaveFilePicker !== 'function') {
+      downloadHtml(html);
+      return 'download';
+    }
+    let handle = deckFileHandle;
+    if (!handle && pendingHandle) {
+      const resolved = await pendingHandle;
+      if (resolved && resolved.error) throw resolved.error;
+      handle = resolved;
+    }
+    if (!handle) {
+      handle = await window.showSaveFilePicker({
+        suggestedName: (document.title || 'deck') + '.html',
+        types: [{ description: 'HTML file', accept: { 'text/html': ['.html', '.htm'] } }]
+      });
+      deckFileHandle = handle;
+    }
+    const writable = await handle.createWritable();
+    await writable.write(html);
+    await writable.close();
+    return 'file';
+  }
+
   function sanitizeExportDocument(docEl) {
     if (!docEl || !docEl.querySelector) return;
     const body = docEl.querySelector('body');
     if (body) {
-      body.classList.remove('deck-edit-mode', 'slide-anim-paused', 'deck-sidebar-open');
+      body.classList.remove('deck-edit-mode', 'slide-anim-paused', 'deck-sidebar-open', 'deck-laser-mode');
     }
     sanitizeEditableState(docEl);
-    docEl.querySelectorAll('.deck-left-hover-anchor, #deckAddElementMenu, #progressBar, #navDots, #slideSidebar, #rteToolbar, #slotImageInput, script').forEach((el) => el.remove());
+    sanitizeLaserState(docEl);
+    docEl.querySelectorAll('#slotImageInput').forEach((el) => el.remove());
     const filmstrip = docEl.querySelector('#filmstripList');
     if (filmstrip) filmstrip.innerHTML = '';
     const addMenu = docEl.querySelector('#deckAddElementMenu');
@@ -3746,7 +4179,7 @@
     docEl.querySelectorAll('.slide-object-graphic').forEach((g) => {
       if (!g.querySelector('img, video')) g.classList.remove('slide-object-graphic--empty');
     });
-    ['#editToggle', '#pagesToggle', '#btnSave', '#btnAddElement', '#btnUnlockLayout', '#deckEditChrome', '#rteToolbar'].forEach((selector) => {
+    ['#editToggle', '#pagesToggle', '#laserToggle', '#fullscreenToggle', '#btnSave', '#btnAddElement', '#btnUnlockLayout', '#deckEditChrome', '#rteToolbar'].forEach((selector) => {
       const el = docEl.querySelector(selector);
       if (!el) return;
       el.classList.remove('show', 'active', 'visible');
@@ -3772,49 +4205,36 @@
   /* ---------- persistence ---------- */
   function saveState() {
     const root = document.querySelector('.slides-offset') || document.body;
-    const data = {
-      v: 2,
-      deckHtml: serializeSlidesRoot(root)
-    };
+    const data = serializeDeckState(root);
+    const pendingHandle = requestDeckFileHandle();
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
     } catch (e) { console.warn(e); }
+    buildStandaloneHtml(data).then((result) => {
+      if (result.warnings.length) console.warn('Some media could not be embedded:', result.warnings);
+      return writeStandaloneHtml(result.html, pendingHandle);
+    }).catch((e) => {
+      console.warn(e);
+      buildStandaloneHtml(data).then((result) => downloadHtml(result.html)).catch((err) => console.warn(err));
+    });
+    return data;
   }
 
   function loadState() {
     try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) return;
-      const data = JSON.parse(raw);
+      const embedded = readEmbeddedDeckState(document);
+      const local = parseDeckState(localStorage.getItem(STORAGE_KEY));
+      const data = newestDeckState(local, embedded);
       if (!data) return;
-      const parent = document.querySelector('.slides-offset') || document.body;
-      if (typeof data.deckHtml === 'string') {
-        parent.innerHTML = data.deckHtml;
-      } else if (Array.isArray(data.slides)) {
-        const map = {};
-        Array.from(parent.querySelectorAll(':scope > section.slide')).forEach((s) => { map[s.id] = s; });
-        data.slides.forEach((entry) => {
-          const el = map[entry.id];
-          if (el) el.innerHTML = entry.html;
-        });
-      } else return;
-      ensureObjectControls(document);
-      deck.refreshSlides();
-      deck._syncCurrentFromScroll();
-      deck._updateChrome();
+      applyDeckState(data);
     } catch (e) { console.warn(e); }
   }
 
   function exportHtml() {
-    const clone = document.documentElement.cloneNode(true);
-    sanitizeExportDocument(clone);
-    const html = '<!DOCTYPE html>\n' + clone.outerHTML;
-    const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = (document.title || 'deck') + '.html';
-    a.click();
-    URL.revokeObjectURL(a.href);
+    buildStandaloneHtml().then((result) => {
+      if (result.warnings.length) console.warn('Some media could not be embedded:', result.warnings);
+      downloadHtml(result.html);
+    }).catch((e) => console.warn(e));
   }
 
   /* ---------- init ---------- */
@@ -3825,6 +4245,8 @@
   const deckLeftHover = document.getElementById('deckLeftHover');
   const editToggle = document.getElementById('editToggle');
   const pagesToggle = document.getElementById('pagesToggle');
+  const laserToggle = document.getElementById('laserToggle');
+  const fullscreenToggle = document.getElementById('fullscreenToggle');
   const btnSave = document.getElementById('btnSave');
   const btnAddElement = document.getElementById('btnAddElement');
   const btnUnlockLayout = document.getElementById('btnUnlockLayout');
@@ -3977,9 +4399,13 @@
     }
   }
   const slotEditor = new SlotEditor(history, editor, updateUndoRedoChrome);
+  const laserPointer = new LaserPointerController(laserToggle);
+  const fullscreenController = new FullscreenController(fullscreenToggle);
 
   ensureObjectControls(document);
   editor.bind();
+  laserPointer.bind();
+  fullscreenController.bind();
   slotEditor.bind();
   updateUndoRedoChrome();
 
@@ -4138,7 +4564,7 @@
     deck.refreshSlides();
     const slide = deck.slides[deck.current];
     if (!slide) return;
-    const layer = slide.querySelector('.slide-edit-layer');
+    const layer = ensureSlideEditLayer(slide);
     if (!layer) return;
 
     const oid = allocateDeckOid();
@@ -4168,6 +4594,7 @@
       const te = document.createElement('div');
       te.className = 'slide-object-text';
       te.setAttribute('contenteditable', 'false');
+      te.style.fontSize = 'var(--body-size)';
       te.textContent = 'New text';
       wrap.appendChild(te);
     } else if (kind === 'image') {
@@ -4246,76 +4673,284 @@
     });
     btnAddElement.addEventListener('mouseenter', () => clearTimeout(hideT));
     btnAddElement.addEventListener('mouseleave', scheduleHide);
-    deckAddElementMenu.querySelectorAll('[data-add-kind]').forEach((b) => {
-      b.addEventListener('click', (ev) => {
-        ev.stopPropagation();
-        const k = b.getAttribute('data-add-kind');
-        closeAddElementMenu();
-        if (k === 'text' || k === 'image' || k === 'video') addSlideObjectToCurrentSlide(k);
-      });
+    deckAddElementMenu.addEventListener('mouseenter', () => clearTimeout(hideT));
+    deckAddElementMenu.addEventListener('mouseleave', scheduleHide);
+    deckAddElementMenu.addEventListener('click', (ev) => {
+      const btn = ev.target.closest('[data-add-kind]');
+      if (!btn || !deckAddElementMenu.contains(btn)) return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      const k = btn.getAttribute('data-add-kind');
+      closeAddElementMenu();
+      if (k === 'text' || k === 'image' || k === 'video') addSlideObjectToCurrentSlide(k);
     });
+  }
+
+  const UNLOCK_EXCLUDED_CLASS_TOKENS = new Set([
+    'axis', 'badge', 'brand', 'btn', 'button', 'caption', 'checkbox', 'chip',
+    'control', 'date', 'decor', 'decoration', 'footer', 'gridline',
+    'hairline', 'lab', 'lab2', 'label', 'logo', 'meta', 'nav', 'page', 'pagedot',
+    'pager', 'runner', 'sidebar', 'spec', 'tab', 'tick', 'toolbar', 'tree',
+    'tree-item', 'win-btn', 'xaxis', 'yaxis'
+  ]);
+  const UNLOCK_BODY_CLASS_TOKENS = new Set([
+    'body', 'card-copy', 'card-text', 'copy', 'desc', 'description', 'eyebrow',
+    'kicker', 'lead', 'lede', 'note', 'paragraph', 'quote', 'subtitle', 'text'
+  ]);
+  const UNLOCK_TITLE_CLASS_TOKENS = new Set([
+    'deck-title', 'display', 'h', 'h1', 'h2', 'h3', 'h4', 'headline',
+    'heading', 'hero', 'hero-title', 'lockup', 'slide-title', 'stmt', 'title', 'ttl'
+  ]);
+  const UNLOCK_METRIC_CLASS_TOKENS = new Set([
+    'amount', 'metric', 'percent', 'stat', 'stat-value', 'value'
+  ]);
+
+  function unlockClassTokens(slot) {
+    const tokens = new Set();
+    let node = slot;
+    while (node && node.nodeType === 1 && node.classList && !node.classList.contains('slide')) {
+      node.classList.forEach((token) => tokens.add(token.toLowerCase()));
+      node = node.parentElement;
+    }
+    return tokens;
+  }
+
+  function unlockText(slot) {
+    return (slot.textContent || '').replace(/\s+/g, ' ').trim();
+  }
+
+  function unlockHasToken(tokens, allowed) {
+    for (const token of tokens) {
+      if (allowed.has(token)) return true;
+    }
+    return false;
+  }
+
+  function unlockLooksLikeChromeText(text) {
+    const plain = text.replace(/\s+/g, ' ').trim();
+    if (!plain) return true;
+    if (/^(?:\[\]|x|_|-|\+|×|ok|cancel|help)$/i.test(plain)) return true;
+    if (/^ok\s+cancel\s+help$/i.test(plain)) return true;
+    if (/^\d{1,2}$/.test(plain)) return true;
+    if (/^\d{1,2}\s*\/\s*\d{1,2}$/.test(plain)) return true;
+    if (/^\d{4}$/.test(plain)) return true;
+    if (/^\[[^\]]+\]$/.test(plain) && plain.length <= 24) return true;
+    if (/^version\b.*\bbuild\b/i.test(plain)) return true;
+    return false;
+  }
+
+  function isUnlockableSlot(slot, slide) {
+    if (!slot || slot.closest('[data-slide-object]')) return false;
+    if (slot.getAttribute('aria-hidden') === 'true') return false;
+    const style = window.getComputedStyle(slot);
+    if (style.display === 'none' || style.visibility === 'hidden') return false;
+    const rect = slot.getBoundingClientRect();
+    const slideRect = slide.getBoundingClientRect();
+    if (rect.width < 8 || rect.height < 8) return false;
+    if (rect.bottom < slideRect.top || rect.top > slideRect.bottom || rect.right < slideRect.left || rect.left > slideRect.right) return false;
+    const tokens = unlockClassTokens(slot);
+    if (unlockHasToken(tokens, UNLOCK_EXCLUDED_CLASS_TOKENS)) return false;
+    const text = unlockText(slot);
+    const slotType = (slot.dataset.slotType || '').toLowerCase();
+    if (slotType === 'image') return true;
+    if (unlockLooksLikeChromeText(text)) return false;
+    const tag = slot.tagName.toLowerCase();
+    const isTitle = /^h[1-4]$/.test(tag) || unlockHasToken(tokens, UNLOCK_TITLE_CLASS_TOKENS);
+    const isBody = ['p', 'li', 'blockquote', 'cite'].includes(tag) || unlockHasToken(tokens, UNLOCK_BODY_CLASS_TOKENS);
+    const isMetric = slotType === 'metric' || unlockHasToken(tokens, UNLOCK_METRIC_CLASS_TOKENS);
+    if (isMetric && !unlockHasToken(tokens, UNLOCK_EXCLUDED_CLASS_TOKENS) && /[0-9]/.test(text) && text.length > 2) return true;
+    return isTitle || isBody;
+  }
+
+  function getUnlockableSlots(slide) {
+    return Array.from(slide.querySelectorAll('[data-edit-slot]')).filter((slot) => isUnlockableSlot(slot, slide));
+  }
+
+  function slotRectToObjectStyle(slot, slide) {
+    const rect = slot.getBoundingClientRect();
+    const slideRect = slide.getBoundingClientRect();
+    const left = Math.max(0, Math.min(96, ((rect.left - slideRect.left) / slideRect.width) * 100));
+    const top = Math.max(0, Math.min(96, ((rect.top - slideRect.top) / slideRect.height) * 100));
+    const width = Math.max(12, Math.min(92 - left, (rect.width / slideRect.width) * 100));
+    const minHeightRem = Math.max(3, Math.min(12, rect.height / 16));
+    return 'left:' + left.toFixed(2) + '%;top:' + top.toFixed(2) + '%;width:' + width.toFixed(2) + '%;min-height:' + minHeightRem.toFixed(2) + 'rem;';
+  }
+
+  function slotRectToGraphicObjectStyle(slot, slide) {
+    const rect = slot.getBoundingClientRect();
+    const slideRect = slide.getBoundingClientRect();
+    const base = slotRectToObjectStyle(slot, slide);
+    const height = Math.max(5, Math.min(96, (rect.height / slideRect.height) * 100));
+    return base + 'height:' + height.toFixed(2) + '%;';
+  }
+
+  function unlockRootForSlot(slot, slide) {
+    return slot;
+  }
+
+  const UNLOCK_FREEZE_PROPS = [
+    'fontFamily',
+    'fontSize',
+    'fontWeight',
+    'fontStyle',
+    'letterSpacing',
+    'lineHeight',
+    'textTransform',
+    'textAlign',
+    'color'
+  ];
+
+  function freezeUnlockedNodeTextStyle(node) {
+    const cs = getComputedStyle(node);
+    UNLOCK_FREEZE_PROPS.forEach((prop) => {
+      node.style[prop] = cs[prop];
+    });
+  }
+
+  function freezeUnlockedTextStyle(node) {
+    freezeUnlockedNodeTextStyle(node);
+    node.querySelectorAll('span, strong, em, b, i, a, small, cite, mark, code').forEach((child) => {
+      freezeUnlockedNodeTextStyle(child);
+    });
+  }
+
+  function createUnlockWrapper(slot, slide) {
+    const obj = document.createElement('div');
+    obj.className = 'slide-object template-component-object';
+    obj.setAttribute('data-slide-object', '');
+    obj.setAttribute('data-object-type', slot.dataset.slotType === 'image' ? 'image' : 'text');
+    obj.setAttribute('data-component-source-slot', slot.dataset.editSlot || '');
+    obj.style.cssText = slot.dataset.slotType === 'image'
+      ? slotRectToGraphicObjectStyle(slot, slide)
+      : slotRectToObjectStyle(slot, slide);
+
+    const move = document.createElement('button');
+    move.type = 'button';
+    move.className = 'slide-object-move';
+    move.setAttribute('aria-label', 'Move object');
+    move.textContent = '⠿';
+
+    const del = document.createElement('button');
+    del.type = 'button';
+    del.className = 'slide-object-delete';
+    del.setAttribute('aria-label', 'Delete object');
+    del.textContent = '×';
+
+    obj.appendChild(move);
+    obj.appendChild(del);
+    return obj;
+  }
+
+  function createUnlockPlaceholder(slot) {
+    const placeholder = document.createElement('span');
+    placeholder.hidden = true;
+    placeholder.setAttribute('aria-hidden', 'true');
+    placeholder.setAttribute('data-unlock-placeholder', slot.dataset.editSlot || '');
+    return placeholder;
+  }
+
+  function restoreUnlockAttr(node, name, value) {
+    if (value === null) node.removeAttribute(name);
+    else node.setAttribute(name, value);
+  }
+
+  function insertUnlockPlaceholder(state) {
+    const parent = state.originalParent;
+    const root = state.root;
+    const placeholder = state.placeholder;
+    if (!parent || !placeholder) return false;
+    if (placeholder.parentNode === parent) return true;
+    if (root && root.parentNode === parent) {
+      parent.insertBefore(placeholder, root);
+      return true;
+    }
+    if (state.originalNextSibling && state.originalNextSibling.parentNode === parent) {
+      parent.insertBefore(placeholder, state.originalNextSibling);
+      return true;
+    }
+    parent.appendChild(placeholder);
+    return true;
+  }
+
+  function applyUnlockState(state, layer) {
+    if (!state || !state.root || !state.obj || !layer) return false;
+    if (state.root.closest('[data-slide-object]') && state.root.parentNode !== state.obj) return false;
+    if (!insertUnlockPlaceholder(state)) return false;
+
+    if (state.type === 'image') {
+      state.root.classList.add('slide-object-graphic');
+    } else {
+      freezeUnlockedTextStyle(state.root);
+      state.root.classList.add('slide-object-text');
+      state.root.setAttribute('contenteditable', 'false');
+    }
+
+    state.obj.appendChild(state.root);
+    if (state.obj.parentNode !== layer) layer.appendChild(state.obj);
+    return true;
+  }
+
+  function restoreUnlockState(state) {
+    if (!state || !state.root || !state.obj) return;
+    const parent = state.placeholder && state.placeholder.parentNode;
+    if (parent) parent.insertBefore(state.root, state.placeholder);
+    else if (state.originalNextSibling && state.originalNextSibling.parentNode === state.originalParent) {
+      state.originalParent.insertBefore(state.root, state.originalNextSibling);
+    } else if (state.originalParent) {
+      state.originalParent.appendChild(state.root);
+    }
+
+    restoreUnlockAttr(state.root, 'class', state.originalClass);
+    restoreUnlockAttr(state.root, 'style', state.originalStyle);
+    restoreUnlockAttr(state.root, 'contenteditable', state.originalContentEditable);
+
+    if (state.placeholder && state.placeholder.parentNode) state.placeholder.parentNode.removeChild(state.placeholder);
+    if (state.obj.parentNode) state.obj.parentNode.removeChild(state.obj);
   }
 
   function componentizeCurrentSlide() {
     const slide = deck.slides[deck.current] || document.querySelector('.slides-offset > section.slide');
     if (!slide || slide.dataset.componentized === 'true') return;
-    if (!window.confirm('Unlock this slide layout? This creates movable copies of editable content while keeping the original template layout intact.')) return;
-    const layer = slide.querySelector('.slide-edit-layer');
+    if (!window.confirm('Unlock this slide layout? This makes editable content movable while preserving its original styling.')) return;
+    const layer = ensureSlideEditLayer(slide);
     if (!layer) return;
-    const inserted = [];
-    const slots = Array.from(slide.querySelectorAll('[data-edit-slot]')).filter((slot) => !slot.closest('[data-slide-object]'));
-    slots.slice(0, 12).forEach((slot, index) => {
-      const obj = document.createElement('div');
-      obj.className = 'slide-object template-component-object';
-      obj.setAttribute('data-slide-object', '');
-      obj.setAttribute('data-object-type', slot.dataset.slotType === 'image' ? 'image' : 'text');
-      obj.setAttribute('data-component-source-slot', slot.dataset.editSlot || '');
-      obj.style.cssText = 'left:' + (8 + (index % 3) * 28) + '%;top:' + (12 + Math.floor(index / 3) * 16) + '%;width:24%;min-height:3rem;';
-      const move = document.createElement('button');
-      move.type = 'button';
-      move.className = 'slide-object-move';
-      move.setAttribute('aria-label', 'Move object');
-      move.textContent = '⠿';
-      const del = document.createElement('button');
-      del.type = 'button';
-      del.className = 'slide-object-delete';
-      del.setAttribute('aria-label', 'Delete object');
-      del.textContent = '×';
-      const body = document.createElement('div');
-      if (slot.dataset.slotType === 'image') {
-        body.className = 'slide-object-graphic';
-        body.innerHTML = slot.tagName === 'IMG' ? slot.outerHTML : slot.innerHTML;
-      } else {
-        body.className = 'slide-object-text';
-        body.setAttribute('contenteditable', 'false');
-        body.innerHTML = slot.innerHTML;
-      }
-      obj.appendChild(move);
-      obj.appendChild(del);
-      obj.appendChild(body);
-      layer.appendChild(obj);
-      inserted.push(obj);
+    const states = [];
+    const slots = getUnlockableSlots(slide);
+    if (!slots.length) return;
+    slots.slice(0, 12).forEach((slot) => {
+      const root = unlockRootForSlot(slot, slide);
+      if (!root || !root.parentNode || root.closest('[data-slide-object]')) return;
+      const state = {
+        obj: createUnlockWrapper(root, slide),
+        root,
+        placeholder: createUnlockPlaceholder(slot),
+        originalParent: root.parentNode,
+        originalNextSibling: root.nextSibling,
+        originalClass: root.getAttribute('class'),
+        originalStyle: root.getAttribute('style'),
+        originalContentEditable: root.getAttribute('contenteditable'),
+        type: slot.dataset.slotType === 'image' ? 'image' : 'text'
+      };
+      if (applyUnlockState(state, layer)) states.push(state);
     });
+    if (!states.length) return;
     slide.dataset.componentized = 'true';
     ensureObjectControls(slide);
     renumberDeckObjects(slide);
     history.push({
       undo: () => {
-        inserted.forEach((obj) => {
-          if (obj && obj.parentNode) obj.parentNode.removeChild(obj);
-        });
+        states.forEach(restoreUnlockState);
         delete slide.dataset.componentized;
         deck.refreshSlides();
         editor.clearSelection();
         ensureObjectControls(document);
       },
       redo: () => {
-        inserted.forEach((obj) => {
-          if (obj && !obj.parentNode) layer.appendChild(obj);
-        });
+        states.forEach((state) => applyUnlockState(state, layer));
         slide.dataset.componentized = 'true';
         deck.refreshSlides();
         ensureObjectControls(document);
+        renumberDeckObjects(slide);
       }
     });
     updateUndoRedoChrome();
@@ -4371,6 +5006,8 @@
     sidebar.setOpen(false);
     editToggle.classList.remove('show');
     pagesToggle.classList.remove('show');
+    if (laserToggle) laserToggle.classList.remove('show');
+    if (fullscreenToggle) fullscreenToggle.classList.remove('show');
     if (deckEditChromeEl) deckEditChromeEl.classList.remove('show');
     if (btnSave) btnSave.classList.remove('show');
     if (btnAddElement) btnAddElement.classList.remove('show');
@@ -4379,6 +5016,7 @@
   }
 
   function enterEditMode() {
+    laserPointer.setActive(false);
     editor.setActive(true);
     editToggle.classList.add('active');
     sidebar.setOpen(true);
@@ -4398,6 +5036,8 @@
     clearTimeout(hideT);
     editToggle.classList.add('show');
     pagesToggle.classList.add('show');
+    if (laserToggle) laserToggle.classList.add('show');
+    if (fullscreenToggle) fullscreenToggle.classList.add('show');
     if (document.body.classList.contains('deck-edit-mode')) {
       if (btnSave) btnSave.classList.add('show');
       if (btnAddElement) btnAddElement.classList.add('show');
@@ -4407,8 +5047,11 @@
   }
   function scheduleHide() {
     hideT = setTimeout(() => {
+      if (deckAddElementMenu && deckAddElementMenu.classList.contains('open')) return;
       editToggle.classList.remove('show');
       pagesToggle.classList.remove('show');
+      if (laserToggle) laserToggle.classList.remove('show');
+      if (fullscreenToggle) fullscreenToggle.classList.remove('show');
       if (btnSave) btnSave.classList.remove('show');
       if (btnAddElement) btnAddElement.classList.remove('show');
       if (btnUnlockLayout) btnUnlockLayout.classList.remove('show');
@@ -4423,6 +5066,14 @@
   editToggle.addEventListener('mouseleave', scheduleHide);
   pagesToggle.addEventListener('mouseenter', () => clearTimeout(hideT));
   pagesToggle.addEventListener('mouseleave', scheduleHide);
+  if (laserToggle) {
+    laserToggle.addEventListener('mouseenter', () => clearTimeout(hideT));
+    laserToggle.addEventListener('mouseleave', scheduleHide);
+  }
+  if (fullscreenToggle) {
+    fullscreenToggle.addEventListener('mouseenter', () => clearTimeout(hideT));
+    fullscreenToggle.addEventListener('mouseleave', scheduleHide);
+  }
   if (deckEditChromeEl) {
     deckEditChromeEl.addEventListener('mouseenter', () => clearTimeout(hideT));
     deckEditChromeEl.addEventListener('mouseleave', scheduleHide);
@@ -4453,6 +5104,11 @@
 
   document.addEventListener('keydown', (e) => {
     const ce = e.target.closest && e.target.closest('.slide-object-text[contenteditable="true"], [data-edit-slot][contenteditable="true"]');
+    if (!editor.active && laserPointer.active && (e.key === 'Escape' || e.key === 'Esc')) {
+      e.preventDefault();
+      laserPointer.setActive(false);
+      return;
+    }
     if (editor.active && (e.key === 'Escape' || e.key === 'Esc')) {
       if (ce) {
         e.preventDefault();

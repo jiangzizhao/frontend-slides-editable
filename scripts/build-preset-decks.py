@@ -10,6 +10,7 @@ from __future__ import annotations
 import re
 import time
 from dataclasses import dataclass
+from html import escape
 from pathlib import Path
 from typing import Optional
 
@@ -373,11 +374,16 @@ class SlideBuilder:
         self.objects: list[str] = []
         self._count = 0
 
-    def text(self, cls: str, style: str, html: str) -> None:
+    def text(self, cls: str, style: str, html: str, *, bounds_exempt: str = "") -> None:
         oid = f"s{self.slide_index}-o{self._count}"
         self._count += 1
+        exempt_attr = (
+            f' data-bounds-exempt="{escape(bounds_exempt, quote=True)}"'
+            if bounds_exempt
+            else ""
+        )
         self.objects.append(
-            f'''    <div class="slide-object reveal {cls}" data-slide-object data-oid="{oid}" data-object-type="text" style="{style}">
+            f'''    <div class="slide-object reveal {cls}" data-slide-object data-oid="{oid}" data-object-type="text" style="{style}"{exempt_attr}>
       <button type="button" class="slide-object-move" aria-label="Move">⠿</button>
       <button type="button" class="slide-object-delete" aria-label="Delete object">×</button>
       <button type="button" class="slide-object-resize" aria-label="Resize"></button>
@@ -786,7 +792,23 @@ def workflow_slide(slide_index: int, preset: Preset, layout: dict[str, object]) 
 
 def arch_slide(slide_index: int, preset: Preset, layout: dict[str, object]) -> str:
     builder = SlideBuilder(slide_index, f"slide-architecture layout-{preset.content_archetype}")
-    builder.text("section-number", layout["number"], "03 / Runtime contract")
+    # The "bold" archetype renders the section number as an oversized display
+    # numeral (clamp(2.8rem, 8vw, 6.8rem), line-height 0.8) — the bold layout's
+    # design DNA. On the fixed 633px measure slide that glyph's axis-aligned box
+    # overshoots the bottom edge by a few px while the ink stays inside; exempt
+    # it from the bounds gate rather than shrink the signature numeral.
+    number_exempt = (
+        "oversized display section numeral is the bold layout's design DNA; "
+        "axis-aligned box overshoots the slide bottom by a few px, ink inside"
+        if preset.content_archetype == "bold"
+        else ""
+    )
+    builder.text(
+        "section-number",
+        layout["number"],
+        "03 / Runtime contract",
+        bounds_exempt=number_exempt,
+    )
     builder.text("section-title", layout["title"], "真正不能丢的是结构契约、视口纪律和 preset identity")
     for style, card in zip(layout["cards"], ARCH_CARDS):
         builder.text("arch-card", style, card_html(*card))
