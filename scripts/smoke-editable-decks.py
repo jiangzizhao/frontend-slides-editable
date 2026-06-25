@@ -233,9 +233,10 @@ HTMLAnchorElement.prototype.click = function () {};
 const exportButton = document.getElementById('btnExport');
 if (!exportButton) throw new Error('missing Export button');
 exportButton.click();
-for (let i = 0; i < 80 && !exportedHtml; i++) {
+for (let i = 0; i < 160 && !exportedHtml; i++) {
   await new Promise((resolve) => setTimeout(resolve, 50));
 }
+if (!exportedHtml) return {ok: false, error: 'export produced no HTML'};
 URL.createObjectURL = originalCreateObjectURL;
 HTMLAnchorElement.prototype.click = originalClick;
 const exportedDoc = new DOMParser().parseFromString(exportedHtml, 'text/html');
@@ -311,6 +312,12 @@ URL.createObjectURL = (blob) => {
 URL.revokeObjectURL = () => {};
 const originalClick = HTMLAnchorElement.prototype.click;
 HTMLAnchorElement.prototype.click = function () {};
+window.showSaveFilePicker = async () => ({
+  createWritable: async () => ({
+    write: async () => {},
+    close: async () => {}
+  })
+});
 const save = document.getElementById('btnSave');
 if (!save) throw new Error('missing Save button');
 save.click();
@@ -319,7 +326,10 @@ const savedCount = saved.deckHtml ? (saved.deckHtml.match(/<section\b[^>]*\bclas
 const exportButton = document.getElementById('btnExport');
 if (!exportButton) throw new Error('missing Export button');
 exportButton.click();
-await new Promise((resolve) => setTimeout(resolve, 80));
+for (let i = 0; i < 160 && !exportedHtml; i++) {
+  await new Promise((resolve) => setTimeout(resolve, 50));
+}
+if (!exportedHtml) return {ok: false, error: 'export produced no HTML'};
 URL.createObjectURL = originalCreateObjectURL;
 HTMLAnchorElement.prototype.click = originalClick;
 const exportedDoc = new DOMParser().parseFromString(exportedHtml, 'text/html');
@@ -389,6 +399,12 @@ await new Promise((resolve) => setTimeout(resolve, 40));
 const redoApplied = slot.textContent === marker;
 const save = document.getElementById('btnSave');
 if (!save) throw new Error('missing Save button');
+window.showSaveFilePicker = async () => ({
+  createWritable: async () => ({
+    write: async () => {},
+    close: async () => {}
+  })
+});
 save.click();
 const saved = JSON.parse(localStorage.getItem(storageKey) || '{}');
 const savedHasEdit = typeof saved.deckHtml === 'string' && saved.deckHtml.includes(marker);
@@ -406,9 +422,10 @@ HTMLAnchorElement.prototype.click = function () {};
 const exportButton = document.getElementById('btnExport');
 if (!exportButton) throw new Error('missing Export button');
 exportButton.click();
-for (let i = 0; i < 20 && !exportedHtml; i++) {
+for (let i = 0; i < 160 && !exportedHtml; i++) {
   await new Promise((resolve) => setTimeout(resolve, 50));
 }
+if (!exportedHtml) return {ok: false, error: 'export produced no HTML'};
 URL.createObjectURL = originalCreateObjectURL;
 HTMLAnchorElement.prototype.click = originalClick;
 const exportedDoc = new DOMParser().parseFromString(exportedHtml, 'text/html');
@@ -722,6 +739,12 @@ if (obj) {
 /* Save */
 const save = document.getElementById('btnSave');
 if (!save) throw new Error('missing Save button');
+window.showSaveFilePicker = async () => ({
+  createWritable: async () => ({
+    write: async () => {},
+    close: async () => {}
+  })
+});
 save.click();
 const saved = JSON.parse(localStorage.getItem(storageKey) || '{}');
 /* Export */
@@ -740,9 +763,14 @@ HTMLAnchorElement.prototype.click = function () {};
 const exportBtn = document.getElementById('btnExport');
 if (!exportBtn) throw new Error('missing Export button');
 exportBtn.click();
-await new Promise(r => setTimeout(r, 100));
+for (let i = 0; i < 160 && !exportedHtml; i++) {
+  await new Promise(r => setTimeout(r, 50));
+  try {
+    if (window.__exportedBlob) exportedHtml = await window.__exportedBlob.text();
+  } catch(e) {}
+}
 /* Read the captured blob */
-if (window.__exportedBlob) {
+if (!exportedHtml && window.__exportedBlob) {
   try {
     exportedHtml = await window.__exportedBlob.text();
   } catch(e) {
@@ -753,9 +781,9 @@ if (window.__exportedBlob) {
     } catch(e2) {}
   }
 }
+if (!exportedHtml) return {ok: false, error: 'export produced no HTML', blobReceived};
 URL.createObjectURL = origCreate;
 HTMLAnchorElement.prototype.click = origClick;
-if (!exportedHtml) return {ok: false, error: 'export produced no HTML', blobReceived};
 const exportedDoc = new DOMParser().parseFromString(exportedHtml, 'text/html');
 const slideCount = exportedDoc.querySelectorAll('section.slide').length;
 const originalCount = root.querySelectorAll(':scope > section.slide').length;
@@ -799,13 +827,13 @@ URL.revokeObjectURL = () => {};
 const origClick = HTMLAnchorElement.prototype.click;
 HTMLAnchorElement.prototype.click = function () {};
 document.getElementById('btnExport').click();
-for (let i = 0; i < 20 && !exportedHtml; i++) {
+for (let i = 0; i < 160 && !exportedHtml; i++) {
   await new Promise(r => setTimeout(r, 60));
   if (window.__exportedBlob) exportedHtml = await window.__exportedBlob.text();
 }
+if (!exportedHtml) return {ok: false, error: 'export produced no HTML'};
 URL.createObjectURL = origCreate;
 HTMLAnchorElement.prototype.click = origClick;
-if (!exportedHtml) return {ok: false, error: 'export produced no HTML'};
 const exportedDoc = new DOMParser().parseFromString(exportedHtml, 'text/html');
 const stateEl = exportedDoc.querySelector('#deck-persisted-state[type="application/json"]');
 let state = null;
@@ -837,7 +865,7 @@ window.showSaveFilePicker = async () => ({
   })
 });
 save.click();
-for (let i = 0; i < 20 && !fileClosed; i++) await new Promise(r => setTimeout(r, 60));
+for (let i = 0; i < 160 && !fileClosed; i++) await new Promise(r => setTimeout(r, 60));
 const fileDoc = new DOMParser().parseFromString(fileWrite, 'text/html');
 const fileState = fileDoc.querySelector('#deck-persisted-state[type="application/json"]');
 const fileOk = fileClosed && fileWrite.includes(marker) && !!fileState;
@@ -852,10 +880,11 @@ URL.revokeObjectURL = () => {};
 const origClick = HTMLAnchorElement.prototype.click;
 HTMLAnchorElement.prototype.click = function () {};
 save.click();
-for (let i = 0; i < 20 && !fallbackHtml; i++) {
+for (let i = 0; i < 160 && !fallbackHtml; i++) {
   await new Promise(r => setTimeout(r, 60));
   if (window.__fallbackBlob) fallbackHtml = await window.__fallbackBlob.text();
 }
+if (!fallbackHtml) return {ok: false, error: 'fallback save produced no HTML', fileOk, fileClosed, fileBytes: fileWrite.length};
 URL.createObjectURL = origCreate;
 HTMLAnchorElement.prototype.click = origClick;
 const fallbackDoc = new DOMParser().parseFromString(fallbackHtml, 'text/html');
@@ -944,10 +973,11 @@ URL.revokeObjectURL = () => {};
 const origClick = HTMLAnchorElement.prototype.click;
 HTMLAnchorElement.prototype.click = function () {};
 document.getElementById('btnExport').click();
-for (let i = 0; i < 20 && !exportedHtml; i++) {
+for (let i = 0; i < 160 && !exportedHtml; i++) {
   await new Promise(r => setTimeout(r, 60));
   if (window.__mediaBlob) exportedHtml = await window.__mediaBlob.text();
 }
+if (!exportedHtml) return {ok: false, error: 'export produced no HTML'};
 URL.createObjectURL = origCreate;
 HTMLAnchorElement.prototype.click = origClick;
 const exportedDoc = new DOMParser().parseFromString(exportedHtml, 'text/html');
