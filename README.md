@@ -1,8 +1,45 @@
+<div align="center">
+
 # Frontend Slides - Editable
+
+**把 AI 生成的演示文稿，变成可以继续编辑的单文件 HTML。**<br/>
+**Create stunning single-file HTML decks that stay editable after generation.**
 
 一个适用于 Claude Code / Codex 的技能，用来生成惊艳、带动画、单文件的 HTML 演示文稿，并内置浏览器编辑器：可拖拽对象、调整大小、编辑文本、重排页面、本地保存，并导出干净的独立 HTML。
 
 A Claude Code / Codex skill for creating stunning, animation-rich, single-file HTML presentations with a built-in browser editor: drag objects, resize blocks, edit text, reorder slides, save locally, and export a clean standalone HTML.
+
+<p>
+  <a href="https://github.com/archlizheng/frontend-slides-editable/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/archlizheng/frontend-slides-editable?style=social" /></a>
+  <a href="https://github.com/archlizheng/frontend-slides-editable/blob/main/LICENSE"><img alt="License" src="https://img.shields.io/github/license/archlizheng/frontend-slides-editable?color=22c55e" /></a>
+  <a href="https://github.com/archlizheng/frontend-slides-editable/commits/main"><img alt="Last commit" src="https://img.shields.io/github/last-commit/archlizheng/frontend-slides-editable?color=2563eb" /></a>
+  <img alt="Claude Code and Codex skill" src="https://img.shields.io/badge/Skill-Claude%20Code%20%2F%20Codex-111827" />
+  <img alt="Single-file HTML output" src="https://img.shields.io/badge/Output-single--file%20HTML-f97316" />
+  <img alt="46 presets" src="https://img.shields.io/badge/Presets-46-8b5cf6" />
+</p>
+
+<p>
+  <a href="#toc-installation"><strong>快速安装 / Install</strong></a>
+  ·
+  <a href="#toc-gallery">样式图库 / Gallery</a>
+  ·
+  <a href="#toc-try">试用参考 / Try it</a>
+  ·
+  <a href="#toc-star-history">Star History</a>
+</p>
+
+<sub>如果这个 skill 帮你把 deck 从“一次性生成”变成“可继续打磨”，欢迎点一个 Star 支持。<br/>If this helps your decks stay editable instead of disposable, a Star helps more people find it.</sub>
+
+<br/>
+<br/>
+
+<p>
+  <a title="Cobalt Grid" href="examples/generated/presets/cobalt-grid.html"><img src="docs/preset-previews/cobalt-grid-cover.png" width="32%" alt="Cobalt Grid editable deck preview" /></a>
+  <a title="Studio" href="examples/generated/presets/studio-volt.html"><img src="docs/preset-previews/studio-volt-cover.png" width="32%" alt="Studio editable deck preview" /></a>
+  <a title="Soft Editorial" href="examples/generated/presets/soft-editorial.html"><img src="docs/preset-previews/soft-editorial-cover.png" width="32%" alt="Soft Editorial editable deck preview" /></a>
+</p>
+
+</div>
 
 ## 目录 · Table of contents
 
@@ -14,6 +51,7 @@ A Claude Code / Codex skill for creating stunning, animation-rich, single-file H
 - [文档结构 · Documentation map](#toc-docs)
 - [依赖要求 · Requirements](#toc-requirements)
 - [试用参考 · Try the reference](#toc-try)
+- [Star History](#toc-star-history)
 
 <a id="toc-highlights"></a>
 ## v2.0 更新摘要 · Release 2.0 Highlights
@@ -911,6 +949,21 @@ Then try:
 - **Add element** 添加文本/图/视频 / use **Add element** for text, image, or video
 - 按 `Ctrl+S` 保存 / press `Ctrl+S`
 - 导出 deck / export the deck
+
+<a id="toc-star-history"></a>
+## Star History
+
+如果你喜欢这个项目，欢迎在 GitHub 上给它一个 Star；这会帮助更多需要可编辑 HTML 演示文稿的人发现它。
+
+If you like this project, consider starring it on GitHub so more people can discover editable HTML decks.
+
+<a href="https://www.star-history.com/#archlizheng/frontend-slides-editable&amp;Date">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=archlizheng/frontend-slides-editable&amp;type=Date&amp;theme=dark" />
+    <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=archlizheng/frontend-slides-editable&amp;type=Date" />
+    <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=archlizheng/frontend-slides-editable&amp;type=Date" />
+  </picture>
+</a>
 
 ## 致谢 / Credits
 
