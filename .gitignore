@@ -7,7 +7,18 @@ __pycache__/
 .vscode/
 .design/
 .claude-design-slide-previews/
+.work/
+.smoke-artifacts/
+node_modules/
 examples/generated/test-artifacts/
+
+# Local one-off deck generation experiments.
+The-Founders-Playbook-*-editable.html
+scripts/generate-founders-playbook-*.mjs
+
+# Local development design notes.
+docs/superpowers/
+docs/*-review.md
 
 # Vendor only the small source files needed for ported template generation.
 # Keep the upstream checkout metadata and gallery screenshots out of this skill.

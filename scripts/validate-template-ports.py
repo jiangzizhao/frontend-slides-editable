@@ -132,7 +132,7 @@ class TitleSlotAuditParser(HTMLParser):
             self.in_deck = True
 
         parent_slot_context = any(frame["slot_context"] for frame in self.stack)
-        has_slot = "data-edit-slot" in attrs
+        has_slot = "data-edit-slot" in attrs or "data-slide-object" in attrs
         if has_slot:
             for frame in self.stack:
                 frame["has_slot_descendant"] = True
@@ -205,7 +205,7 @@ class BodySlotAuditParser(HTMLParser):
             self.in_deck = True
 
         parent_slot_context = any(frame["slot_context"] for frame in self.stack)
-        has_slot = "data-edit-slot" in attrs
+        has_slot = "data-edit-slot" in attrs or "data-slide-object" in attrs
         if has_slot:
             for frame in self.stack:
                 frame["has_slot_descendant"] = True
@@ -264,6 +264,7 @@ class ImageSlotAuditParser(HTMLParser):
     def __init__(self) -> None:
         super().__init__(convert_charrefs=True)
         self.deck_depth = 0
+        self.object_depth = 0
         self.issues: list[str] = []
 
     def handle_starttag(self, tag: str, attrs_list) -> None:
@@ -274,7 +275,13 @@ class ImageSlotAuditParser(HTMLParser):
             self.deck_depth += 1
         elif tag == "div" and attrs.get("id") == "deck":
             self.deck_depth = 1
-        if self.deck_depth <= 0 or "aria-hidden" in attrs:
+        if self.object_depth > 0:
+            self.object_depth += 1
+        elif "data-slide-object" in attrs:
+            # A lifted draggable object already provides image editing/selection;
+            # its inner placeholder/img is covered.
+            self.object_depth = 1
+        if self.deck_depth <= 0 or "aria-hidden" in attrs or self.object_depth > 0:
             return
         has_image_slot = "data-edit-slot" in attrs and attrs.get("data-slot-type") == "image"
         if tag == "img" and not has_image_slot:
@@ -284,6 +291,8 @@ class ImageSlotAuditParser(HTMLParser):
             self.issues.append(f"<div class=\"{cls}\">")
 
     def handle_endtag(self, tag: str) -> None:
+        if self.object_depth > 0:
+            self.object_depth -= 1
         if self.deck_depth > 0:
             self.deck_depth -= 1
 
@@ -326,6 +335,18 @@ def validate_common(path: Path, source: str, errors: list[str]) -> None:
         fail(errors, rel, "missing exportHtml()")
     if "sanitizeEditableState" not in source:
         fail(errors, rel, "missing export cleanup sanitizer")
+    portable_tokens = {
+        "embedded persisted state": "deck-persisted-state",
+        "deck state serializer": "function serializeDeckState",
+        "standalone HTML builder": "function buildStandaloneHtml",
+        "filesystem save picker": "showSaveFilePicker",
+        "download fallback": "function downloadHtml",
+    }
+    for label, token in portable_tokens.items():
+        if token not in source:
+            fail(errors, rel, f"missing {label}")
+    if re.search(r"<(?:img|video|source)\b[^>]*\bsrc=[\"']assets/", source, flags=re.I):
+        fail(errors, rel, "media src uses non-portable assets/ path")
 
 
 def validate_port(path: Path, source: str, port, errors: list[str]) -> None:
@@ -337,6 +358,10 @@ def validate_port(path: Path, source: str, port, errors: list[str]) -> None:
     edit_mode = template_edit_mode(source)
     if edit_mode not in TEMPLATE_EDIT_MODES:
         fail(errors, rel, "missing or invalid data-template-edit-mode")
+    elif edit_mode != "slots":
+        fail(errors, rel, f'ported template must default to data-template-edit-mode="slots", found {edit_mode!r}')
+    if re.search(r'<[^>]+\bclass=["\'][^"\']*\btemplate-component-object\b', deck_only, flags=re.I):
+        fail(errors, rel, "ported template contains build-time component objects; default output must preserve native DOM")
     slot_count = source.count("data-edit-slot=")
     if slot_count <= 0:
         fail(errors, rel, "ported template has no editable slots")

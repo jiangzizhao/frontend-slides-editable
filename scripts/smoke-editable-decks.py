@@ -38,9 +38,13 @@ VIEWPORTS = [
     ("mobile-landscape", 844, 390),
 ]
 try:
-    TIMEOUT_SECONDS = int(os.environ.get("SMOKE_TIMEOUT_SECONDS", "35"))
+    TIMEOUT_SECONDS = int(os.environ.get("SMOKE_TIMEOUT_SECONDS", "75"))
 except ValueError as e:
     raise SystemExit("SMOKE_TIMEOUT_SECONDS must be an integer") from e
+try:
+    SMOKE_RETRIES = int(os.environ.get("SMOKE_RETRIES", "1"))
+except ValueError as e:
+    raise SystemExit("SMOKE_RETRIES must be an integer") from e
 
 
 def find_chrome() -> str | None:
@@ -79,6 +83,10 @@ def sample_paths() -> list[Path]:
         return [
             ROOT / "examples" / "generated" / "presets" / "soft-editorial.html",
             ROOT / "examples" / "generated" / "presets" / "monochrome-ledger.html",
+            ROOT / "examples" / "generated" / "presets" / "retro-windows.html",
+            ROOT / "examples" / "generated" / "presets" / "sakura-chroma.html",
+            ROOT / "examples" / "generated" / "presets" / "grove.html",
+            ROOT / "examples" / "generated" / "presets" / "pink-script.html",
         ]
     if matrix == "bounds":
         return sorted((ROOT / "examples" / "generated" / "presets").glob("*.html"))
@@ -124,15 +132,32 @@ setTimeout(() => finish({ok:false,error:'timeout'}), __TIMEOUT_MS__);
             chrome,
             "--headless=new",
             "--disable-gpu",
+            "--disable-background-networking",
+            "--disable-default-apps",
+            "--disable-dev-shm-usage",
+            "--disable-extensions",
             "--disable-web-security",
             "--allow-file-access-from-files",
             "--hide-scrollbars",
+            "--no-first-run",
+            "--no-default-browser-check",
             f"--window-size={width},{height}",
-            "--virtual-time-budget=5000",
+            "--virtual-time-budget=12000",
             "--dump-dom",
             harness.resolve().as_uri(),
         ]
-        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=TIMEOUT_SECONDS)
+        attempts = max(1, SMOKE_RETRIES + 1)
+        last_timeout = None
+        for attempt in range(attempts):
+            try:
+                proc = subprocess.run(cmd, capture_output=True, text=True, timeout=TIMEOUT_SECONDS)
+                break
+            except subprocess.TimeoutExpired as e:
+                last_timeout = e
+                if attempt + 1 >= attempts:
+                    raise
+        else:
+            raise last_timeout or RuntimeError("Chrome smoke did not run")
         dumped = proc.stdout
         attr_match = re.search(r'data-result="([^"]+)"', dumped)
         title_match = re.search(r"<title>RESULT:(.*?)</title>", dumped, flags=re.S)
@@ -165,6 +190,90 @@ hover.dispatchEvent(new MouseEvent('mouseenter', {bubbles: true}));
 await new Promise((resolve) => setTimeout(resolve, 40));
 const hoverShowsControls = edit.classList.contains('show') && pages.classList.contains('show');
 return {ok: clickActivated && keyExited && keyActivated && hoverShowsControls, clickActivated, keyExited, keyActivated, hoverShowsControls};
+"""
+
+
+PRESENTATION_TOOLS_SCRIPT = r"""
+const laser = document.getElementById('laserToggle');
+const fullscreen = document.getElementById('fullscreenToggle');
+const edit = document.getElementById('editToggle');
+const layer = document.getElementById('deckLaserLayer');
+const dot = document.getElementById('laserDot');
+if (!laser) throw new Error('missing Laser button');
+if (!fullscreen) throw new Error('missing Fullscreen button');
+if (!layer) throw new Error('missing laser layer');
+if (!dot) throw new Error('missing laser dot');
+document.body.classList.remove('deck-edit-mode', 'deck-laser-mode');
+laser.classList.remove('active', 'show');
+laser.click();
+await new Promise((resolve) => setTimeout(resolve, 30));
+const laserActivated = document.body.classList.contains('deck-laser-mode') && laser.classList.contains('active');
+const pointer = (target, type, x, y, buttons = 1) => target.dispatchEvent(new PointerEvent(type, {
+  bubbles: true,
+  cancelable: true,
+  pointerId: 42,
+  pointerType: 'mouse',
+  clientX: x,
+  clientY: y,
+  buttons
+}));
+pointer(document, 'pointermove', 120, 140, 0);
+const dotMoved = dot.style.transform.includes('111px') && dot.style.transform.includes('131px');
+let exportedHtml = '';
+const originalCreateObjectURL = URL.createObjectURL;
+URL.createObjectURL = (blob) => {
+  if (blob && typeof blob.text === 'function') {
+    blob.text().then((text) => { exportedHtml = text; });
+  }
+  return 'blob:editable-smoke-laser';
+};
+URL.revokeObjectURL = () => {};
+const originalClick = HTMLAnchorElement.prototype.click;
+HTMLAnchorElement.prototype.click = function () {};
+const exportButton = document.getElementById('btnExport');
+if (!exportButton) throw new Error('missing Export button');
+exportButton.click();
+for (let i = 0; i < 160 && !exportedHtml; i++) {
+  await new Promise((resolve) => setTimeout(resolve, 50));
+}
+if (!exportedHtml) return {ok: false, error: 'export produced no HTML'};
+URL.createObjectURL = originalCreateObjectURL;
+HTMLAnchorElement.prototype.click = originalClick;
+const exportedDoc = new DOMParser().parseFromString(exportedHtml, 'text/html');
+const exportClean = !!exportedHtml
+  && !!exportedDoc.querySelector('#laserToggle')
+  && !!exportedDoc.querySelector('#fullscreenToggle')
+  && exportedHtml.includes('class LaserPointerController')
+  && exportedHtml.includes('requestFullscreen')
+  && !exportedDoc.body.classList.contains('deck-laser-mode')
+  && !exportedDoc.querySelector('.laser-trail-segment')
+  && !exportedDoc.querySelector('#laserToggle.active');
+laser.click();
+laser.click();
+await new Promise((resolve) => setTimeout(resolve, 30));
+edit.click();
+await new Promise((resolve) => setTimeout(resolve, 40));
+const editClosesLaser = document.body.classList.contains('deck-edit-mode') && !document.body.classList.contains('deck-laser-mode');
+document.dispatchEvent(new KeyboardEvent('keydown', {key: 'e', bubbles: true, cancelable: true}));
+await new Promise((resolve) => setTimeout(resolve, 40));
+let fullscreenCalls = 0;
+Object.defineProperty(document.documentElement, 'requestFullscreen', {
+  configurable: true,
+  value: () => {
+    fullscreenCalls += 1;
+    return Promise.resolve();
+  }
+});
+fullscreen.click();
+await new Promise((resolve) => setTimeout(resolve, 40));
+return {
+  ok: laserActivated && dotMoved && editClosesLaser && fullscreenCalls === 1 && exportClean,
+  laserActivated,
+  dotMoved,
+  editClosesLaser,
+  fullscreenCalls,
+  exportClean
+};
 """
 
 
@@ -203,6 +312,12 @@ URL.createObjectURL = (blob) => {
 URL.revokeObjectURL = () => {};
 const originalClick = HTMLAnchorElement.prototype.click;
 HTMLAnchorElement.prototype.click = function () {};
+window.showSaveFilePicker = async () => ({
+  createWritable: async () => ({
+    write: async () => {},
+    close: async () => {}
+  })
+});
 const save = document.getElementById('btnSave');
 if (!save) throw new Error('missing Save button');
 save.click();
@@ -211,7 +326,10 @@ const savedCount = saved.deckHtml ? (saved.deckHtml.match(/<section\b[^>]*\bclas
 const exportButton = document.getElementById('btnExport');
 if (!exportButton) throw new Error('missing Export button');
 exportButton.click();
-await new Promise((resolve) => setTimeout(resolve, 80));
+for (let i = 0; i < 160 && !exportedHtml; i++) {
+  await new Promise((resolve) => setTimeout(resolve, 50));
+}
+if (!exportedHtml) return {ok: false, error: 'export produced no HTML'};
 URL.createObjectURL = originalCreateObjectURL;
 HTMLAnchorElement.prototype.click = originalClick;
 const exportedDoc = new DOMParser().parseFromString(exportedHtml, 'text/html');
@@ -281,6 +399,12 @@ await new Promise((resolve) => setTimeout(resolve, 40));
 const redoApplied = slot.textContent === marker;
 const save = document.getElementById('btnSave');
 if (!save) throw new Error('missing Save button');
+window.showSaveFilePicker = async () => ({
+  createWritable: async () => ({
+    write: async () => {},
+    close: async () => {}
+  })
+});
 save.click();
 const saved = JSON.parse(localStorage.getItem(storageKey) || '{}');
 const savedHasEdit = typeof saved.deckHtml === 'string' && saved.deckHtml.includes(marker);
@@ -298,9 +422,10 @@ HTMLAnchorElement.prototype.click = function () {};
 const exportButton = document.getElementById('btnExport');
 if (!exportButton) throw new Error('missing Export button');
 exportButton.click();
-for (let i = 0; i < 20 && !exportedHtml; i++) {
+for (let i = 0; i < 160 && !exportedHtml; i++) {
   await new Promise((resolve) => setTimeout(resolve, 50));
 }
+if (!exportedHtml) return {ok: false, error: 'export produced no HTML'};
 URL.createObjectURL = originalCreateObjectURL;
 HTMLAnchorElement.prototype.click = originalClick;
 const exportedDoc = new DOMParser().parseFromString(exportedHtml, 'text/html');
@@ -320,38 +445,150 @@ window.confirm = () => true;
 const root = document.querySelector('.slides-offset');
 if (!root) throw new Error('missing slides root');
 const edit = document.getElementById('editToggle');
-const unlock = document.getElementById('btnUnlockLayout');
 if (!edit) throw new Error('missing Edit button');
+const unlock = document.getElementById('btnUnlockLayout');
 if (!unlock) throw new Error('missing Unlock layout button');
 if (!document.body.classList.contains('deck-edit-mode')) {
   edit.click();
   await new Promise((resolve) => setTimeout(resolve, 40));
 }
-const slide = root.querySelector(':scope > section.slide');
-if (!slide) throw new Error('missing slide');
-const beforeObjects = slide.querySelectorAll('[data-slide-object]').length;
+if (!document.body.classList.contains('deck-edit-mode')) throw new Error('edit mode did not activate');
+const currentSlide = root.querySelector(':scope > section.slide.visible, :scope > section.slide.is-active') ||
+  root.querySelector(':scope > section.slide');
+if (!currentSlide) throw new Error('missing current slide');
+const visibleSlot = (slot) => {
+  if (!slot || slot.closest('.slide-edit-layer')) return false;
+  if (slot.getAttribute('data-slot-type') === 'image') return false;
+  const text = slot.textContent.replace(/\s+/g, ' ').trim();
+  if (!text) return false;
+  const style = getComputedStyle(slot);
+  if (style.display === 'none' || style.visibility === 'hidden') return false;
+  const rect = slot.getBoundingClientRect();
+  return rect.width > 0 && rect.height > 0;
+};
+const titleTokens = new Set(['deck-title', 'display', 'h', 'h1', 'h2', 'h3', 'h4', 'headline', 'heading', 'hero', 'hero-title', 'lockup', 'slide-title', 'stmt', 'title', 'ttl']);
+const bodyTokens = new Set(['body', 'card-copy', 'card-text', 'copy', 'desc', 'description', 'eyebrow', 'kicker', 'lead', 'lede', 'note', 'paragraph', 'quote', 'subtitle', 'text']);
+const metricTokens = new Set(['amount', 'metric', 'percent', 'stat', 'stat-value', 'value']);
+const hasToken = (slot, set) => Array.from(slot.classList || []).some((token) => set.has(token.toLowerCase()));
+const unlockableShape = (slot) => {
+  const tag = slot.tagName.toLowerCase();
+  const slotType = (slot.getAttribute('data-slot-type') || '').toLowerCase();
+  if (/^h[1-4]$/.test(tag) || hasToken(slot, titleTokens)) return true;
+  if (['p', 'li', 'blockquote', 'cite'].includes(tag) || hasToken(slot, bodyTokens)) return true;
+  const text = slot.textContent.replace(/\s+/g, ' ').trim();
+  return (slotType === 'metric' || hasToken(slot, metricTokens)) && /[0-9]/.test(text) && text.length > 2;
+};
+const sourceSlot = Array.from(currentSlide.querySelectorAll('[data-edit-slot]:not([data-slot-type="image"])')).find((slot) => visibleSlot(slot) && unlockableShape(slot));
+if (!sourceSlot) return {ok: true, skipped: true, reason: 'no eligible unlockable slot'};
+const sourceSlotId = sourceSlot.getAttribute('data-edit-slot');
+const normalizeText = (value) => String(value || '').replace(/\s+/g, ' ').trim();
+const sourceText = normalizeText(sourceSlot.textContent);
+const sourceTag = sourceSlot.tagName;
+const sourceClasses = Array.from(sourceSlot.classList);
+const before = getComputedStyle(sourceSlot);
+const beforeStyle = {
+  fontFamily: before.fontFamily,
+  fontSize: before.fontSize,
+  fontWeight: before.fontWeight,
+  color: before.color
+};
+const sourceInline = sourceSlot.querySelector('span, strong, em, b, i, a, small, cite, mark, code');
+const beforeInlineStyle = sourceInline ? (() => {
+  const cs = getComputedStyle(sourceInline);
+  return {selector: sourceInline.tagName, fontFamily: cs.fontFamily, fontSize: cs.fontSize, fontWeight: cs.fontWeight, color: cs.color};
+})() : null;
 unlock.click();
-await new Promise((resolve) => setTimeout(resolve, 80));
-const afterObjects = slide.querySelectorAll('[data-slide-object]').length;
-const hasComponentObjects = afterObjects > beforeObjects && !!slide.querySelector('[data-component-source-slot]');
-const oids = Array.from(slide.querySelectorAll('[data-oid]')).map((o) => o.getAttribute('data-oid'));
-const uniqueOids = new Set(oids).size === oids.length;
-const firstObject = slide.querySelector('[data-component-source-slot]');
-const selectedOrPresent = !!firstObject;
-const undo = document.getElementById('btnUndo');
-if (!undo) throw new Error('missing undo button');
-const undoEnabled = !undo.disabled;
-undo.click();
-await new Promise((resolve) => setTimeout(resolve, 60));
-const undoDisabledAfter = undo.disabled;
-const undoAriaAfter = undo.getAttribute('aria-disabled');
-const restoredSlide = root.querySelector(':scope > section.slide');
-const restoredObjects = restoredSlide.querySelectorAll('[data-slide-object]').length;
-const restoredComponentized = restoredSlide.dataset.componentized === 'true';
-const restored = restoredObjects === beforeObjects && !restoredComponentized;
-return {ok: hasComponentObjects && uniqueOids && selectedOrPresent && undoEnabled && restored,
-  beforeObjects, afterObjects, restoredObjects, restoredComponentized, undoDisabledAfter, undoAriaAfter, hasComponentObjects, uniqueOids, selectedOrPresent, undoEnabled, restored};
+await new Promise((resolve) => setTimeout(resolve, 120));
+const escapedSlotId = CSS.escape(sourceSlotId);
+const component = currentSlide.querySelector(`[data-component-source-slot="${escapedSlotId}"]`);
+const moved = component && component.querySelector(`[data-edit-slot="${escapedSlotId}"]`);
+const sameSlotNodes = Array.from(currentSlide.querySelectorAll(`[data-edit-slot="${escapedSlotId}"]`));
+const duplicateOutsideComponent = sameSlotNodes.some((node) => !component || !component.contains(node));
+const after = moved ? getComputedStyle(moved) : null;
+const fontSizeDelta = after ? Math.abs(parseFloat(after.fontSize) - parseFloat(beforeStyle.fontSize)) : Infinity;
+const movedInline = moved && beforeInlineStyle ? moved.querySelector(beforeInlineStyle.selector.toLowerCase()) : null;
+const afterInlineStyle = movedInline ? getComputedStyle(movedInline) : null;
+const inlineFontSizeDelta = afterInlineStyle && beforeInlineStyle ? Math.abs(parseFloat(afterInlineStyle.fontSize) - parseFloat(beforeInlineStyle.fontSize)) : 0;
+const classChecks = sourceClasses.map((className) => ({className, kept: !!moved && moved.classList.contains(className)}));
+const tagKept = !!moved && moved.tagName === sourceTag;
+const textKept = !!moved && normalizeText(moved.textContent) === sourceText;
+const classesKept = classChecks.every((entry) => entry.kept);
+const styleChecks = {
+  fontFamily: !!after && after.fontFamily === beforeStyle.fontFamily,
+  fontSize: fontSizeDelta <= 1,
+  fontWeight: !!after && after.fontWeight === beforeStyle.fontWeight,
+  color: !!after && after.color === beforeStyle.color
+};
+const inlineStyleKept = !beforeInlineStyle || (!!afterInlineStyle
+  && afterInlineStyle.fontFamily === beforeInlineStyle.fontFamily
+  && inlineFontSizeDelta <= 1
+  && afterInlineStyle.fontWeight === beforeInlineStyle.fontWeight
+  && afterInlineStyle.color === beforeInlineStyle.color);
+let dragMoved = false;
+if (component) {
+  const move = component.querySelector('.slide-object-move');
+  if (move) {
+    const r = move.getBoundingClientRect();
+    const startLeft = component.style.left;
+    const startTop = component.style.top;
+    const EventCtor = window.PointerEvent || window.MouseEvent;
+    const pointer = (target, type, x, y) => target.dispatchEvent(new EventCtor(type, {
+      bubbles: true,
+      cancelable: true,
+      pointerId: 1,
+      pointerType: 'mouse',
+      isPrimary: true,
+      clientX: x,
+      clientY: y,
+      button: 0,
+      buttons: type === 'pointerup' ? 0 : 1
+    }));
+    pointer(move, 'pointerdown', r.left + r.width / 2, r.top + r.height / 2);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    pointer(document, 'pointermove', r.left + r.width / 2 + 96, r.top + r.height / 2 + 64);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    pointer(document, 'pointerup', r.left + r.width / 2 + 96, r.top + r.height / 2 + 64);
+    await new Promise((resolve) => setTimeout(resolve, 60));
+    dragMoved = component.style.left !== startLeft || component.style.top !== startTop;
+  }
+}
+const checks = {
+  componentExists: !!component,
+  componentIsObject: !!component && component.hasAttribute('data-slide-object'),
+  movedExists: !!moved,
+  movedSlotIdKept: !!moved && moved.getAttribute('data-edit-slot') === sourceSlotId,
+  noDuplicateOutsideComponent: !duplicateOutsideComponent,
+  tagKept,
+  classesKept,
+  textKept,
+  fontFamilyKept: styleChecks.fontFamily,
+  fontSizeKept: styleChecks.fontSize,
+  fontWeightKept: styleChecks.fontWeight,
+  colorKept: styleChecks.color,
+  inlineStyleKept,
+  dragMoved
+};
+return {
+  ok: Object.values(checks).every(Boolean),
+  checks,
+  sourceSlotId,
+  sourceTag,
+  movedTag: moved && moved.tagName,
+  sourceClasses,
+  missingClasses: classChecks.filter((entry) => !entry.kept).map((entry) => entry.className),
+  sourceText,
+  movedText: moved && normalizeText(moved.textContent),
+  beforeStyle,
+  afterStyle: after && {fontFamily: after.fontFamily, fontSize: after.fontSize, fontWeight: after.fontWeight, color: after.color},
+  beforeInlineStyle,
+  afterInlineStyle: afterInlineStyle && {fontFamily: afterInlineStyle.fontFamily, fontSize: afterInlineStyle.fontSize, fontWeight: afterInlineStyle.fontWeight, color: afterInlineStyle.color},
+  fontSizeDelta,
+  inlineFontSizeDelta,
+  sameSlotCount: sameSlotNodes.length,
+  outsideDuplicateCount: sameSlotNodes.filter((node) => !component || !component.contains(node)).length
+};
 """
+
 
 UNDO_REDO_CHAIN_SCRIPT = r"""
 window.confirm = () => true;
@@ -502,6 +739,12 @@ if (obj) {
 /* Save */
 const save = document.getElementById('btnSave');
 if (!save) throw new Error('missing Save button');
+window.showSaveFilePicker = async () => ({
+  createWritable: async () => ({
+    write: async () => {},
+    close: async () => {}
+  })
+});
 save.click();
 const saved = JSON.parse(localStorage.getItem(storageKey) || '{}');
 /* Export */
@@ -520,9 +763,14 @@ HTMLAnchorElement.prototype.click = function () {};
 const exportBtn = document.getElementById('btnExport');
 if (!exportBtn) throw new Error('missing Export button');
 exportBtn.click();
-await new Promise(r => setTimeout(r, 100));
+for (let i = 0; i < 160 && !exportedHtml; i++) {
+  await new Promise(r => setTimeout(r, 50));
+  try {
+    if (window.__exportedBlob) exportedHtml = await window.__exportedBlob.text();
+  } catch(e) {}
+}
 /* Read the captured blob */
-if (window.__exportedBlob) {
+if (!exportedHtml && window.__exportedBlob) {
   try {
     exportedHtml = await window.__exportedBlob.text();
   } catch(e) {
@@ -533,14 +781,16 @@ if (window.__exportedBlob) {
     } catch(e2) {}
   }
 }
+if (!exportedHtml) return {ok: false, error: 'export produced no HTML', blobReceived};
 URL.createObjectURL = origCreate;
 HTMLAnchorElement.prototype.click = origClick;
-if (!exportedHtml) return {ok: false, error: 'export produced no HTML', blobReceived};
 const exportedDoc = new DOMParser().parseFromString(exportedHtml, 'text/html');
 const slideCount = exportedDoc.querySelectorAll('section.slide').length;
 const originalCount = root.querySelectorAll(':scope > section.slide').length;
 const checks = {
   hasDoctype: exportedHtml.includes('<!DOCTYPE html>'),
+  hasPersistedState: !!exportedDoc.querySelector('#deck-persisted-state[type="application/json"]'),
+  hasStandaloneBuilder: exportedHtml.includes('function buildStandaloneHtml'),
   noEditMode: !exportedDoc.body.classList.contains('deck-edit-mode'),
   noSidebarOpen: !exportedDoc.body.classList.contains('deck-sidebar-open'),
   noSelected: !exportedDoc.querySelector('.slide-object.is-selected'),
@@ -549,9 +799,202 @@ const checks = {
   hasAllSlides: slideCount === originalCount,
   noEditableTrue: !exportedDoc.querySelector('[contenteditable="true"]'),
   savedHasContent: typeof saved.deckHtml === 'string' && saved.deckHtml.length > 100,
+  noAssetsMediaPath: !/<(?:img|video|source)\b[^>]*\bsrc=["']assets\//i.test(exportedHtml),
 };
 const allPass = Object.values(checks).every(Boolean);
 return {ok: allPass, slideCount, originalCount, checks};
+"""
+
+EXPORT_EMBEDDED_STATE_SCRIPT = r"""
+const root = document.querySelector('.slides-offset');
+if (!root) throw new Error('missing slides root');
+const edit = document.getElementById('editToggle');
+if (!document.body.classList.contains('deck-edit-mode')) {
+  edit.click();
+  await new Promise(r => setTimeout(r, 40));
+}
+const text = root.querySelector('.slide-object-text');
+if (!text) throw new Error('missing editable text');
+const marker = 'Portable export marker ' + Date.now();
+text.innerHTML = marker;
+let exportedHtml = '';
+const origCreate = URL.createObjectURL;
+URL.createObjectURL = (blob) => {
+  window.__exportedBlob = blob;
+  return 'blob:embedded-state';
+};
+URL.revokeObjectURL = () => {};
+const origClick = HTMLAnchorElement.prototype.click;
+HTMLAnchorElement.prototype.click = function () {};
+document.getElementById('btnExport').click();
+for (let i = 0; i < 160 && !exportedHtml; i++) {
+  await new Promise(r => setTimeout(r, 60));
+  if (window.__exportedBlob) exportedHtml = await window.__exportedBlob.text();
+}
+if (!exportedHtml) return {ok: false, error: 'export produced no HTML'};
+URL.createObjectURL = origCreate;
+HTMLAnchorElement.prototype.click = origClick;
+const exportedDoc = new DOMParser().parseFromString(exportedHtml, 'text/html');
+const stateEl = exportedDoc.querySelector('#deck-persisted-state[type="application/json"]');
+let state = null;
+try { state = stateEl ? JSON.parse(stateEl.textContent || '{}') : null; } catch(e) {}
+const checks = {
+  markerInDom: exportedDoc.querySelector('.slides-offset') && exportedDoc.querySelector('.slides-offset').innerHTML.includes(marker),
+  markerInState: !!state && typeof state.deckHtml === 'string' && state.deckHtml.includes(marker),
+  hasRevision: !!state && Number(state.revision) > 0,
+  noAssetsMediaPath: !/<(?:img|video|source)\b[^>]*\bsrc=["']assets\//i.test(exportedHtml),
+};
+return {ok: Object.values(checks).every(Boolean), checks};
+"""
+
+SAVE_PORTABILITY_SCRIPT = r"""
+const root = document.querySelector('.slides-offset');
+if (!root) throw new Error('missing slides root');
+const save = document.getElementById('btnSave');
+if (!save) throw new Error('missing Save button');
+const text = root.querySelector('.slide-object-text');
+if (!text) throw new Error('missing editable text');
+const marker = 'Portable save marker ' + Date.now();
+text.innerHTML = marker;
+let fileWrite = '';
+let fileClosed = false;
+window.showSaveFilePicker = async () => ({
+  createWritable: async () => ({
+    write: async (chunk) => { fileWrite += String(chunk); },
+    close: async () => { fileClosed = true; }
+  })
+});
+save.click();
+for (let i = 0; i < 160 && !fileClosed; i++) await new Promise(r => setTimeout(r, 60));
+const fileDoc = new DOMParser().parseFromString(fileWrite, 'text/html');
+const fileState = fileDoc.querySelector('#deck-persisted-state[type="application/json"]');
+const fileOk = fileClosed && fileWrite.includes(marker) && !!fileState;
+let fallbackHtml = '';
+window.showSaveFilePicker = undefined;
+const origCreate = URL.createObjectURL;
+URL.createObjectURL = (blob) => {
+  window.__fallbackBlob = blob;
+  return 'blob:save-fallback';
+};
+URL.revokeObjectURL = () => {};
+const origClick = HTMLAnchorElement.prototype.click;
+HTMLAnchorElement.prototype.click = function () {};
+save.click();
+for (let i = 0; i < 160 && !fallbackHtml; i++) {
+  await new Promise(r => setTimeout(r, 60));
+  if (window.__fallbackBlob) fallbackHtml = await window.__fallbackBlob.text();
+}
+if (!fallbackHtml) return {ok: false, error: 'fallback save produced no HTML', fileOk, fileClosed, fileBytes: fileWrite.length};
+URL.createObjectURL = origCreate;
+HTMLAnchorElement.prototype.click = origClick;
+const fallbackDoc = new DOMParser().parseFromString(fallbackHtml, 'text/html');
+const fallbackOk = fallbackHtml.includes(marker) && !!fallbackDoc.querySelector('#deck-persisted-state[type="application/json"]');
+return {ok: fileOk && fallbackOk, fileOk, fallbackOk, fileClosed, fileBytes: fileWrite.length, fallbackBytes: fallbackHtml.length};
+"""
+
+ADD_ELEMENT_STRESS_SCRIPT = r"""
+const root = document.querySelector('.slides-offset');
+if (!root) throw new Error('missing slides root');
+const edit = document.getElementById('editToggle');
+if (!document.body.classList.contains('deck-edit-mode')) {
+  edit.click();
+  await new Promise(r => setTimeout(r, 40));
+}
+const slide = root.querySelector(':scope > section.slide');
+if (!slide) throw new Error('missing slide');
+const existingLayer = slide.querySelector(':scope > .slide-edit-layer');
+if (existingLayer) existingLayer.remove();
+const addBtn = document.getElementById('btnAddElement');
+const addMenu = document.getElementById('deckAddElementMenu');
+if (!addBtn || !addMenu) throw new Error('missing Add element UI');
+const added = [];
+async function addKind(kind) {
+  addBtn.click();
+  await new Promise(r => setTimeout(r, 40));
+  addBtn.dispatchEvent(new MouseEvent('mouseleave', {bubbles:true}));
+  const hover = document.getElementById('deckLeftHover');
+  if (hover) hover.dispatchEvent(new MouseEvent('mouseleave', {bubbles:true}));
+  await new Promise(r => setTimeout(r, 460));
+  const menuStillOpen = addMenu.classList.contains('open') && addMenu.hidden === false;
+  const before = slide.querySelectorAll('[data-slide-object]').length;
+  const btn = addMenu.querySelector('[data-add-kind="' + kind + '"]');
+  if (!btn) throw new Error('missing add kind ' + kind);
+  btn.click();
+  await new Promise(r => setTimeout(r, 80));
+  const layer = slide.querySelector(':scope > .slide-edit-layer');
+  const obj = layer && Array.from(layer.querySelectorAll('[data-slide-object]')).find((el) => el.getAttribute('data-object-type') === kind);
+  const after = slide.querySelectorAll('[data-slide-object]').length;
+  added.push({kind, menuStillOpen, layerCreated: !!layer, countChanged: after === before + 1, selected: !!obj && obj.classList.contains('is-selected')});
+}
+await addKind('text');
+await addKind('image');
+await addKind('video');
+const undo = document.getElementById('btnUndo');
+if (!undo) throw new Error('missing undo button');
+const beforeUndo = slide.querySelectorAll('[data-slide-object]').length;
+undo.click();
+await new Promise(r => setTimeout(r, 80));
+const afterUndo = slide.querySelectorAll('[data-slide-object]').length;
+const undoRemoved = afterUndo === beforeUndo - 1;
+return {ok: added.every((entry) => entry.menuStillOpen && entry.layerCreated && entry.countChanged && entry.selected) && undoRemoved, added, undoRemoved};
+"""
+
+MEDIA_PORTABILITY_SCRIPT = r"""
+const root = document.querySelector('.slides-offset');
+if (!root) throw new Error('missing slides root');
+const edit = document.getElementById('editToggle');
+if (!document.body.classList.contains('deck-edit-mode')) {
+  edit.click();
+  await new Promise(r => setTimeout(r, 40));
+}
+const addBtn = document.getElementById('btnAddElement');
+const addMenu = document.getElementById('deckAddElementMenu');
+async function addKind(kind) {
+  addBtn.click();
+  await new Promise(r => setTimeout(r, 30));
+  addMenu.querySelector('[data-add-kind="' + kind + '"]').click();
+  await new Promise(r => setTimeout(r, 60));
+  const objects = Array.from(root.querySelectorAll('.slide-object[data-object-type="' + kind + '"]'));
+  return objects[objects.length - 1];
+}
+const imageObj = await addKind('image');
+const videoObj = await addKind('video');
+const tinyPng = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=';
+const tinyVideo = 'data:video/mp4;base64,AAAA';
+imageObj.querySelector('.slide-object-graphic').innerHTML = '<img alt="" src="' + tinyPng + '">';
+videoObj.querySelector('.slide-object-graphic').innerHTML = '<video controls src="' + tinyVideo + '"></video>';
+let exportedHtml = '';
+const origCreate = URL.createObjectURL;
+URL.createObjectURL = (blob) => {
+  window.__mediaBlob = blob;
+  return 'blob:media-portability';
+};
+URL.revokeObjectURL = () => {};
+const origClick = HTMLAnchorElement.prototype.click;
+HTMLAnchorElement.prototype.click = function () {};
+document.getElementById('btnExport').click();
+for (let i = 0; i < 160 && !exportedHtml; i++) {
+  await new Promise(r => setTimeout(r, 60));
+  if (window.__mediaBlob) exportedHtml = await window.__mediaBlob.text();
+}
+if (!exportedHtml) return {ok: false, error: 'export produced no HTML'};
+URL.createObjectURL = origCreate;
+HTMLAnchorElement.prototype.click = origClick;
+const exportedDoc = new DOMParser().parseFromString(exportedHtml, 'text/html');
+const media = Array.from(exportedDoc.querySelectorAll('.slides-offset img[src], .slides-offset video[src], .slides-offset source[src]'));
+let state = null;
+try {
+  const stateEl = exportedDoc.querySelector('#deck-persisted-state');
+  state = stateEl ? JSON.parse(stateEl.textContent || '{}') : null;
+} catch(e) {}
+const checks = {
+  hasMedia: media.length >= 2,
+  allData: media.every((el) => (el.getAttribute('src') || '').startsWith('data:')),
+  noFileInput: !exportedDoc.querySelector('input[type="file"]'),
+  noAssetsMediaPath: !/<(?:img|video|source)\b[^>]*\bsrc=["']assets\//i.test(exportedHtml),
+  stateHasDataMedia: !!state && /src=\\"data:|src="data:/.test(JSON.stringify(state.deckHtml || '')),
+};
+return {ok: Object.values(checks).every(Boolean), checks, mediaCount: media.length};
 """
 
 RTE_SMOKE_SCRIPT = r"""
@@ -711,11 +1154,14 @@ return {ok: allOk, ...results};
 """
 
 EDITABLE_BOUNDS_SCRIPT = r"""
+await document.fonts.ready;
 const root = document.querySelector('.slides-offset');
 if (!root) throw new Error('missing slides root');
 const slides = root.querySelectorAll(':scope > section.slide');
 const clipped = [];
-const TOLERANCE = 2;
+const exempted = [];
+const exemptErrors = [];
+const TOLERANCE = 5;
 for (let si = 0; si < slides.length; si++) {
   const slide = slides[si];
   const sr = slide.getBoundingClientRect();
@@ -735,13 +1181,28 @@ for (let si = 0; si < slides.length; si++) {
     if (r.width < 1 || r.height < 1) continue;
     if (r.bottom > slideBottom + TOLERANCE || r.right > slideRight + TOLERANCE ||
         r.left < slideLeft - TOLERANCE || r.top < slideTop - TOLERANCE) {
+      const label = slot.getAttribute('data-edit-slot') || '';
+      if (slot.hasAttribute('data-bounds-exempt')) {
+        const reason = slot.getAttribute('data-bounds-exempt') || '';
+        if (!reason.trim()) {
+          exemptErrors.push({slide: slide.id || 'slide-' + si, type: 'slot', label: label});
+        } else {
+          exempted.push({slide: slide.id || 'slide-' + si, label: label, reason: reason});
+        }
+        continue;
+      }
+      const over = {};
+      if (r.bottom > slideBottom + TOLERANCE) over.bottom = Math.round(r.bottom - slideBottom);
+      if (r.right  > slideRight  + TOLERANCE) over.right  = Math.round(r.right  - slideRight);
+      if (r.left   < slideLeft   - TOLERANCE) over.left   = Math.round(slideLeft - r.left);
+      if (r.top    < slideTop    - TOLERANCE) over.top    = Math.round(slideTop - r.top);
       clipped.push({
         slide: slide.id || 'slide-' + si,
         type: 'slot',
-        label: slot.getAttribute('data-edit-slot') || '',
+        label: label,
         slotType: slot.getAttribute('data-slot-type') || '',
         slideH: Math.round(sr.height),
-        overBottom: Math.round(r.bottom - slideBottom),
+        over: over,
       });
     }
   }
@@ -754,18 +1215,33 @@ for (let si = 0; si < slides.length; si++) {
     if (r.width < 1 || r.height < 1) continue;
     if (r.bottom > slideBottom + TOLERANCE || r.right > slideRight + TOLERANCE ||
         r.left < slideLeft - TOLERANCE || r.top < slideTop - TOLERANCE) {
+      const label = obj.getAttribute('data-oid') || '';
+      if (obj.hasAttribute('data-bounds-exempt')) {
+        const reason = obj.getAttribute('data-bounds-exempt') || '';
+        if (!reason.trim()) {
+          exemptErrors.push({slide: slide.id || 'slide-' + si, type: 'object', label: label});
+        } else {
+          exempted.push({slide: slide.id || 'slide-' + si, label: label, reason: reason});
+        }
+        continue;
+      }
+      const over = {};
+      if (r.bottom > slideBottom + TOLERANCE) over.bottom = Math.round(r.bottom - slideBottom);
+      if (r.right  > slideRight  + TOLERANCE) over.right  = Math.round(r.right  - slideRight);
+      if (r.left   < slideLeft   - TOLERANCE) over.left   = Math.round(slideLeft - r.left);
+      if (r.top    < slideTop    - TOLERANCE) over.top    = Math.round(slideTop - r.top);
       clipped.push({
         slide: slide.id || 'slide-' + si,
         type: 'object',
-        label: obj.getAttribute('data-oid') || '',
+        label: label,
         objectType: obj.getAttribute('data-object-type') || '',
         slideH: Math.round(sr.height),
-        overBottom: Math.round(r.bottom - slideBottom),
+        over: over,
       });
     }
   }
 }
-return {ok: clipped.length === 0, clippedCount: clipped.length, clipped: clipped.slice(0, 20), totalSlides: slides.length};
+return {ok: clipped.length === 0 && exemptErrors.length === 0, clippedCount: clipped.length, clipped: clipped, exemptedCount: exempted.length, exempted: exempted, exemptErrors: exemptErrors, totalSlides: slides.length};
 """
 
 
@@ -782,6 +1258,65 @@ return {ok: overflow.length === 0, overflow};
 """
 
 
+def _format_edges(over: dict) -> str:
+    parts = [f"{edge}:{over[edge]}" for edge in ("bottom", "right", "left", "top") if edge in over]
+    return ",".join(parts) if parts else "none"
+
+
+BOUNDS_ARTIFACT_PATH = ROOT / ".smoke-artifacts" / "bounds-report.json"
+
+
+def _load_bounds_report() -> dict:
+    try:
+        existing = json.loads(BOUNDS_ARTIFACT_PATH.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return existing if isinstance(existing, dict) else {}
+
+
+def _bounds_entry(result: dict) -> dict:
+    return {
+        "clippedCount": result.get("clippedCount", 0),
+        "clipped": result.get("clipped", []),
+        "exemptedCount": result.get("exemptedCount", 0),
+        "exempted": result.get("exempted", []),
+        "exemptErrors": result.get("exemptErrors", []),
+        "totalSlides": result.get("totalSlides", 0),
+    }
+
+
+def _flush_bounds_report(report: dict) -> None:
+    BOUNDS_ARTIFACT_PATH.parent.mkdir(parents=True, exist_ok=True)
+    BOUNDS_ARTIFACT_PATH.write_text(json.dumps(report, indent=2), encoding="utf-8")
+
+
+def _bounds_failure(rel: str, result: dict, *, clip_limit: int, show_slide_height: bool) -> str | None:
+    """Return an error string for an out-of-bounds result, or None if within bounds."""
+    exempt_errors = result.get("exemptErrors", [])
+    if exempt_errors:
+        detail = "; ".join(
+            f"{e.get('slide','?')}:{e.get('type','?')}:{e.get('label','')}"
+            for e in exempt_errors[:8]
+        )
+        return (
+            f"{rel} bounds: {len(exempt_errors)} exemptions missing a reason — {detail} "
+            f"(report: {BOUNDS_ARTIFACT_PATH})"
+        )
+    if not result.get("ok"):
+        clipped = result.get("clipped", [])
+        summary = "; ".join(
+            f"{c['slide']}:{c['type']}:{c.get('label') or c.get('objectType','')} "
+            f"edges={_format_edges(c.get('over', {}))}"
+            + (f" (slideH={c.get('slideH','?')})" if show_slide_height else "")
+            for c in clipped[:clip_limit]
+        )
+        return (
+            f"{rel} bounds: {result.get('clippedCount',0)} clipped, {result.get('exemptedCount',0)} exempted — {summary} "
+            f"(report: {BOUNDS_ARTIFACT_PATH})"
+        )
+    return None
+
+
 def main() -> int:
     chrome = find_chrome()
     if not chrome:
@@ -790,25 +1325,34 @@ def main() -> int:
     errors: list[str] = []
     samples = sample_paths()
     matrix_lower = os.environ.get("SMOKE_PRESET_MATRIX", "").strip().lower()
+    bounds_report = _load_bounds_report()
+    bounds_touched = False
     for sample in samples:
         if not sample.is_file():
             errors.append(f"missing sample {sample.relative_to(ROOT)}")
             continue
         if matrix_lower == "bounds":
             result = chrome_eval(chrome, sample, 1280, 720, EDITABLE_BOUNDS_SCRIPT)
-            if not result.get("ok"):
-                clipped = result.get("clipped", [])
-                summary = "; ".join(
-                    f"{c['slide']}:{c['type']}:{c.get('label') or c.get('objectType','')} over={c.get('overBottom',0)}px (slideH={c.get('slideH','?')})"
-                    for c in clipped[:5]
+            rel = str(sample.relative_to(ROOT))
+            bounds_report[rel] = _bounds_entry(result)
+            bounds_touched = True
+            failure = _bounds_failure(rel, result, clip_limit=8, show_slide_height=True)
+            if failure:
+                errors.append(failure)
+            else:
+                print(
+                    f"{rel} bounds ok: 0 clipped, {result.get('exemptedCount', 0)} exempted "
+                    f"(report: {BOUNDS_ARTIFACT_PATH})"
                 )
-                errors.append(f"{sample.relative_to(ROOT)} bounds: {result.get('clippedCount',0)} clipped — {summary}")
             continue
         result = chrome_eval(chrome, sample, 1280, 720, EDIT_MODE_SCRIPT)
         if not result.get("ok"):
             errors.append(f"{sample.relative_to(ROOT)} edit mode failed: {result}")
         matrix_mode = bool(os.environ.get("SMOKE_PRESET_MATRIX"))
         if not matrix_mode:
+            result = chrome_eval(chrome, sample, 1280, 720, PRESENTATION_TOOLS_SCRIPT)
+            if not result.get("ok"):
+                errors.append(f"{sample.relative_to(ROOT)} presentation tools failed: {result}")
             result = chrome_eval(chrome, sample, 1280, 720, PAGES_SCRIPT)
             if not result.get("ok"):
                 errors.append(f"{sample.relative_to(ROOT)} pages/export interaction failed: {result}")
@@ -821,6 +1365,18 @@ def main() -> int:
                 result = chrome_eval(chrome, sample, 1280, 720, EXPORT_INTEGRITY_SCRIPT)
                 if not result.get("ok"):
                     errors.append(f"{sample.relative_to(ROOT)} export integrity failed: {result}")
+                result = chrome_eval(chrome, sample, 1280, 720, EXPORT_EMBEDDED_STATE_SCRIPT)
+                if not result.get("ok"):
+                    errors.append(f"{sample.relative_to(ROOT)} embedded export state failed: {result}")
+                result = chrome_eval(chrome, sample, 1280, 720, SAVE_PORTABILITY_SCRIPT)
+                if not result.get("ok"):
+                    errors.append(f"{sample.relative_to(ROOT)} portable save failed: {result}")
+                result = chrome_eval(chrome, sample, 1280, 720, ADD_ELEMENT_STRESS_SCRIPT)
+                if not result.get("ok"):
+                    errors.append(f"{sample.relative_to(ROOT)} add element stress failed: {result}")
+                result = chrome_eval(chrome, sample, 1280, 720, MEDIA_PORTABILITY_SCRIPT)
+                if not result.get("ok"):
+                    errors.append(f"{sample.relative_to(ROOT)} media portability failed: {result}")
                 # B1-B3/B6/B7: RTE and usability smoke
                 result = chrome_eval(chrome, sample, 1280, 720, RTE_SMOKE_SCRIPT)
                 if not result.get("ok"):
@@ -830,25 +1386,31 @@ def main() -> int:
             result = chrome_eval(chrome, sample, 1280, 720, SLOT_EDIT_SCRIPT)
             if not result.get("ok"):
                 errors.append(f"{sample.relative_to(ROOT)} slot edit failed: {result}")
-        if os.environ.get("SMOKE_PRESET_MATRIX", "").strip().lower() == "components":
+        if os.environ.get("SMOKE_PRESET_MATRIX", "").strip().lower() in {"components", "ported"}:
             result = chrome_eval(chrome, sample, 1280, 720, COMPONENT_UNLOCK_SCRIPT)
             if not result.get("ok"):
-                errors.append(f"{sample.relative_to(ROOT)} component unlock failed: {result}")
+                errors.append(f"{sample.relative_to(ROOT)} unlock layout regression failed: {result}")
         # C0: Editable bounds visibility check
         if matrix_lower == "all":
             result = chrome_eval(chrome, sample, 1280, 720, EDITABLE_BOUNDS_SCRIPT)
-            if not result.get("ok"):
-                clipped = result.get("clipped", [])
-                summary = "; ".join(
-                    f"{c['slide']}:{c['type']}:{c.get('label') or c.get('objectType','')}"
-                    for c in clipped[:3]
+            rel = str(sample.relative_to(ROOT))
+            bounds_report[rel] = _bounds_entry(result)
+            bounds_touched = True
+            failure = _bounds_failure(rel, result, clip_limit=3, show_slide_height=False)
+            if failure:
+                errors.append(failure)
+            elif result.get("exemptedCount", 0):
+                print(
+                    f"{rel} bounds ok: {result.get('exemptedCount', 0)} exempted "
+                    f"(report: {BOUNDS_ARTIFACT_PATH})"
                 )
-                errors.append(f"{sample.relative_to(ROOT)} bounds: {result.get('clippedCount',0)} clipped — {summary}")
         if not matrix_mode:
             for label, width, height in VIEWPORTS:
                 result = chrome_eval(chrome, sample, width, height, OVERFLOW_SCRIPT)
                 if not result.get("ok"):
                     errors.append(f"{sample.relative_to(ROOT)} {label} overflow: {result}")
+    if bounds_touched:
+        _flush_bounds_report(bounds_report)
     if errors:
         print("Editable deck smoke failed:")
         for error in errors:

@@ -17,16 +17,26 @@ CHECKS = {
         "Adapt for phone portrait + landscape",
         'data-mobile-adaptation="enabled"',
         'data-mobile-adaptation="desktop-default"',
+        "data URLs",
+        "File System Access",
     ],
     "editor-runtime.md": [
         "Copy slide",
         "New Page",
         'data-mobile-adaptation="desktop-default"',
+        "deck-persisted-state",
+        "buildStandaloneHtml",
     ],
     "html-template.md": [
         'data-filmstrip-action="copy"',
         "#btnNewPage",
         'data-mobile-adaptation="desktop-default"',
+        "data:",
+        "showSaveFilePicker",
+    ],
+    "README.md": [
+        "browser draft",
+        "deck-persisted-state",
     ],
     "docs/editable-preset-runtime-tdd-plan.md": [
         "S2 Discovery mobile question",

@@ -41,9 +41,14 @@ function _copySlide(index) {{}}
 function _newPageAfterCurrent() {{}}
 function exportHtml() {{}}
 function sanitizeExportDocument() {{}}
+function serializeDeckState() {{}}
+function buildStandaloneHtml() {{}}
+function downloadHtml() {{}}
+window.showSaveFilePicker = window.showSaveFilePicker || function () {{}};
 localStorage.setItem('x','y');
 document.createElement('button').setAttribute('data-filmstrip-action', 'copy');
 </script>
+<script type="application/json" id="deck-persisted-state">{{"v":3,"revision":1,"updatedAt":"1970-01-01T00:00:00.001Z","deckHtml":""}}</script>
 </body>
 </html>
 """
@@ -79,6 +84,17 @@ FIXTURES = {
     ),
     "missing_mobile_marker": BASE_HTML.replace(' data-mobile-adaptation="desktop-default"', "").format(slides=GOOD_SLIDES),
     "missing_slot_editor_runtime": BASE_HTML.format(slides=GOOD_SLIDES),
+    "missing_portable_state": BASE_HTML.replace(
+        '<script type="application/json" id="deck-persisted-state">{{"v":3,"revision":1,"updatedAt":"1970-01-01T00:00:00.001Z","deckHtml":""}}</script>\n',
+        "",
+    ).format(slides=GOOD_SLIDES),
+    "assets_media_path": BASE_HTML.format(
+        slides="""
+<section class="slide" id="slide-0">
+  <div data-slide-object data-oid="img"><img src="assets/photo.png" alt=""></div>
+</section>
+"""
+    ),
 }
 
 EXPECTED_MESSAGES = {
@@ -87,6 +103,8 @@ EXPECTED_MESSAGES = {
     "static_title": "title-like authored text is not editable",
     "missing_mobile_marker": "missing mobile adaptation marker",
     "missing_slot_editor_runtime": "editable slots require the injected SlotEditor runtime",
+    "missing_portable_state": "missing embedded persisted state",
+    "assets_media_path": "media src uses non-portable assets/ path",
 }
 
 PORT_BASE_HTML = """<!doctype html>
@@ -101,8 +119,13 @@ document.querySelector('.slides-offset').querySelectorAll(':scope > section.slid
 class SlotEditor {{}}
 function exportHtml() {{}}
 function sanitizeEditableState() {{}}
+function serializeDeckState() {{}}
+function buildStandaloneHtml() {{}}
+function downloadHtml() {{}}
+window.showSaveFilePicker = window.showSaveFilePicker || function () {{}};
 localStorage.setItem('x','y');
 </script>
+<script type="application/json" id="deck-persisted-state">{{"v":3,"revision":1,"updatedAt":"1970-01-01T00:00:00.001Z","deckHtml":""}}</script>
 <style>.filmstrip-thumb-host .slide {{ opacity:1; }}</style>
 </body>
 </html>
@@ -111,6 +134,19 @@ localStorage.setItem('x','y');
 
 def port_html(slides: str, mode: str = "slots") -> str:
     return PORT_BASE_HTML.format(mode=mode, slides=slides)
+
+
+PORT_GOOD_FIXTURES = {
+    "ported_slot_mode": port_html("""
+<section class="slide" id="slide-0">
+  <h1 data-edit-slot="s0-title-1" data-slot-type="title" data-slot-locked-layout="true">Editable title</h1>
+  <p data-edit-slot="s0-slot-1" data-slot-type="text" data-slot-locked-layout="true">Editable body copy</p>
+  <div class="slide-edit-layer" aria-hidden="true"></div>
+</section>
+"""
+    ),
+}
+
 
 PORT_FIXTURES = {
     "static_body": port_html("""
@@ -147,6 +183,32 @@ PORT_FIXTURES = {
 </section>
 """,
     ),
+    "ported_assets_media_path": port_html("""
+<section class="slide" id="slide-0">
+  <h1 data-edit-slot="title">Editable title</h1>
+  <img data-edit-slot="image" data-slot-type="image" src="assets/photo.png" alt="">
+</section>
+"""
+    ),
+    "component_mode_default": port_html("""
+<section class="slide" id="slide-0">
+  <h1 data-edit-slot="title">Editable title</h1>
+  <p data-edit-slot="body">Editable body</p>
+</section>
+""", mode="components"
+    ),
+    "build_time_component_object": port_html("""
+<section class="slide" id="slide-0">
+  <h1 data-edit-slot="title">Editable title</h1>
+  <p data-edit-slot="body">Editable body</p>
+  <div class="slide-edit-layer" aria-hidden="true">
+    <div class="slide-object template-component-object" data-slide-object data-oid="component-title">
+      <div class="slide-object-text">Lifted title</div>
+    </div>
+  </div>
+</section>
+"""
+    ),
 }
 
 PORT_EXPECTED_MESSAGES = {
@@ -155,6 +217,9 @@ PORT_EXPECTED_MESSAGES = {
     "static_image_placeholder": "image content is not slot-editable",
     "missing_port_slot_editor": "ported editable slots require the injected SlotEditor runtime",
     "missing_template_edit_mode": "missing or invalid data-template-edit-mode",
+    "ported_assets_media_path": "media src uses non-portable assets/ path",
+    "component_mode_default": 'ported template must default to data-template-edit-mode="slots"',
+    "build_time_component_object": "ported template contains build-time component objects",
 }
 
 
@@ -204,6 +269,13 @@ def main() -> int:
                 errors.append(f"{name}: validator unexpectedly passed")
             elif expected not in output:
                 errors.append(f"{name}: missing expected message {expected!r}; got {output!r}")
+        for name, source in PORT_GOOD_FIXTURES.items():
+            path = tmp_dir / f"{name}.html"
+            path.write_text(source, encoding="utf-8")
+            proc = run_port_validator(path)
+            output = proc.stdout + proc.stderr
+            if proc.returncode != 0:
+                errors.append(f"{name}: port validator unexpectedly failed; got {output!r}")
         for name, source in PORT_FIXTURES.items():
             path = tmp_dir / f"{name}.html"
             path.write_text(source, encoding="utf-8")
@@ -249,7 +321,7 @@ def main() -> int:
             for error in errors:
                 print(f"- {error}")
             return 2
-    print(f"Editable contract fixtures failed as expected ({len(FIXTURES) + len(PORT_FIXTURES)} cases).")
+    print(f"Editable contract fixtures passed ({len(PORT_GOOD_FIXTURES)} good, {len(FIXTURES) + len(PORT_FIXTURES)} failing cases).")
     return 0
 
 
