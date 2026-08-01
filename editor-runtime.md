@@ -47,7 +47,7 @@ Slide **content** theme uses separate tokens (e.g. `--slide-bg-deep`, `--slide-b
 
 ### Ported template slots (`data-edit-slot`)
 
-Beautiful template ports use a locked-layout slot model. Native template content that should remain in the upstream visual system gets `data-edit-slot`, `data-slot-type="text|image|metric|table-cell"`, and `data-slot-locked-layout="true"`. These slots are content-editable in edit mode and participate in RTE, undo/redo, save, and export cleanup, but they do **not** become draggable/resizable slide objects.
+Beautiful template ports may use a locked-layout slot model when the user explicitly chooses content-only editing. Native template content that should remain locked gets `data-edit-slot`, `data-slot-type="text|image|metric|table-cell"`, and `data-slot-locked-layout="true"`. These slots are content-editable in edit mode and participate in RTE, undo/redo, save, and export cleanup, but they do **not** become draggable/resizable slide objects.
 
 Use `[data-slide-object][data-oid]` only for freeform objects in `.slide-edit-layer`, including user-added text/image/video elements. Keeping these two contracts separate preserves template fidelity while still allowing continued content editing.
 
@@ -55,11 +55,11 @@ Use `[data-slide-object][data-oid]` only for freeform objects in `.slide-edit-la
 
 Ported decks must declare `data-template-edit-mode="slots"` or `data-template-edit-mode="components"` on `<html>`.
 
-- `slots` is the default: native template content uses `data-edit-slot`; the template's layout and decorative DOM stay locked.
-- `components` is an optional generation path for semantic blocks that can safely become `[data-slide-object]`.
+- `components` is the default for the full editable runtime: authored semantic blocks become `[data-slide-object][data-oid]` while true structural layers remain locked. Read [component-edit-mode.md](component-edit-mode.md).
+- `slots` is the explicit content-only fallback: native template content uses `data-edit-slot`; the template's layout and decorative DOM stay locked.
 - The runtime's **Unlock layout** action componentizes only the current slide. It moves/wraps original editable slot nodes inside `.slide-edit-layer`, marks them with `data-component-source-slot`, preserves the original tag/classes/computed typography, avoids duplicate content copies, and pushes one undoable history record that restores the original layout position.
 
-Unlock layout is intentionally not a full-DOM conversion. Decorative layers, layout wrappers, grid/axis/tick marks, SVG internals, texture/glitch layers, and animation helper nodes should stay locked.
+Unlock layout is a fallback for `slots` mode, not a required step in `components` mode. Component decks must be ready on load. Decorative layers, layout wrappers, grid/axis/tick marks, SVG internals, texture/glitch layers, and animation helper nodes stay locked.
 
 ### Slide objects (`data-slide-object`)
 
@@ -106,15 +106,15 @@ The snippet uses fixed `px` for brevity; when **generating** new decks, prefer *
 
 - Position with `left` / `top` as **`%` of slide** (reference normalizes on drag end). `width` / `height` may be `%` or `px`; resize writes **`%` of slide** for consistency.
 
-### Top-left control cluster (`#deckLeftHover`)
+### Persistent editing controls (`#deckLeftHover`)
 
-Controls are grouped in a **fixed top-left** container. **Opacity / pointer-events:** **Edit**, **Pages**, **Laser**, **Fullscreen**, and (in edit mode) **#deckEditChrome** (Undo / Redo / Done) use the same **hover-reveal** pattern: moving the pointer into `#deckLeftHover` adds a `.show` class; `mouseleave` + ~400ms delay removes it (including while edit mode is on), matching the original “corner to reveal” behavior.
+Controls are grouped in a **fixed top-left** container. **Edit** and **Pages** remain visible at all times. While editing, **#deckEditChrome** (Undo / Redo / Done), **Save**, and **Add element** remain visible. **Laser** and **Fullscreen** may retain the hover-reveal pattern with a ~400ms grace period because they are secondary presentation tools.
 
-- **Edit** — enters edit mode only (label stays **Edit**; do not duplicate **Done** on this button).
+- **Edit** — toggles edit mode and visibly communicates its current state. Double-clicking an authored object also enters edit mode and selects/focuses that object.
 - **Laser** — `#laserToggle` toggles a presentation-mode laser pointer. It sets `body.deck-laser-mode`, hides the slide cursor, shows `#deckLaserLayer`, and tracks pointer movement on a single `#laserDot`. The laser is a **dot only** — the trailing-stroke effect was removed by design, so no `.laser-trail-segment` (or any trail) nodes are created at runtime. The dot follows the pointer; entering edit mode or pressing **Esc** while laser mode is active closes it. There is no transient trail state to persist; export never includes active laser state.
 - **Fullscreen** — `#fullscreenToggle` uses `document.documentElement.requestFullscreen()` and listens for `fullscreenchange` to sync button state. Unsupported or blocked fullscreen requests should fail without breaking the deck.
-- **Add element** — `#btnAddElement` (same hover-reveal row as **Save** in edit mode). Opens `#deckAddElementMenu` to insert **Text**, **Image** (local file, paste, or placeholder), or **Video** (local file) on the **current** slide with undo support.
-- **Done** — only on `#deckEditChrome`; exits edit mode.
+- **Add element** — `#btnAddElement` stays visible beside **Save** in edit mode. It opens `#deckAddElementMenu` to insert **Text**, **Image** (local file, paste, or placeholder), or **Video** (local file) on the **current** slide with undo support.
+- **Done** — exits edit mode; keep it visible while editing.
 - **Undo** / **Redo** — icon buttons, `disabled` when stack empty; `HistoryStack` notifies via `onChange` callback.
 
 `z-index` should stay **above** slide decorations so presets with corner marks remain readable.
@@ -125,7 +125,7 @@ Controls are grouped in a **fixed top-left** container. **Opacity / pointer-even
 
 ### Edit mode CSS hooks
 
-- `body.deck-edit-mode` — editor active; reference shows handles, sidebar, disables wheel navigation.
+- `body.deck-edit-mode` — editor active; reference shows handles and disables wheel navigation. Do not auto-open the sidebar, and do not disable explicit previous/next page buttons.
 - `.slide-object.is-selected` — selected object (multi-select: multiple elements have this class). **Resize handle** is visible only when selected (`body.deck-edit-mode .slide-object.is-selected .slide-object-resize`). **Delete (×)** shows on hover or when selected (`body.deck-edit-mode .slide-object:hover .slide-object-delete` and `.is-selected`).
 - `body.deck-sidebar-open` — reserve `padding-right` on slides container for the filmstrip.
 
@@ -163,8 +163,8 @@ The reference implementation uses a **command stack** with `undo()` / `redo()` a
 
 | Action | Binding |
 |--------|---------|
-| Toggle edit mode | `E` (not while typing in `contenteditable`), or hotzone / **Edit** button |
-| Exit edit mode | **Done** in `#deckEditChrome` (top-left, hover-revealed), **Esc** (first Esc blurs focused text; Esc again exits), or **E** to toggle off |
+| Toggle edit mode | `E` (not while typing in `contenteditable`), persistent **Edit** button, or double-click an authored object to enter and select it |
+| Exit edit mode | **Done** in the persistent edit toolbar, **Esc** (first Esc blurs focused text; Esc again exits), **Edit**, or **E** |
 | Laser pointer | **Laser** button in `#deckLeftHover`; **Esc** turns it off when not editing |
 | Fullscreen | **Fullscreen** button in `#deckLeftHover`; uses the browser Fullscreen API |
 | Multi-select toggle | `Ctrl` + click object (macOS: **Control** key, not Cmd) |
@@ -173,8 +173,9 @@ The reference implementation uses a **command stack** with `undo()` / `redo()` a
 | Delete object (button) | **×** on object (hover or when selected); single-object delete, undoable |
 | Delete / Backspace | Removes selected objects (confirm if 2+); not while typing in `contenteditable` |
 | Add element | **Add element** (edit mode, top-left row) → Text / Image / Video on current slide |
-| Undo / Redo | **Buttons** in `#deckEditChrome` (hover top-left cluster); or `Ctrl+Z` / **`Ctrl+Y` or `Ctrl+Shift+Z`** when edit mode and not typing in `contenteditable`; macOS **`Cmd+Z`**, **`Cmd+Shift+Z`**, **`Cmd+Y`** |
-| Save | **Save** button in `#deckLeftHover` (row with Edit/Pages, edit mode only, hover-revealed) or `Ctrl+S` / **Cmd+S** |
+| Previous / next page | Persistent page-turn buttons, arrow keys, Page Up/Down, Space; buttons remain usable in edit mode |
+| Undo / Redo | Persistent **Buttons** in `#deckEditChrome`; or `Ctrl+Z` / **`Ctrl+Y` or `Ctrl+Shift+Z`** when edit mode and not typing in `contenteditable`; macOS **`Cmd+Z`**, **`Cmd+Shift+Z`**, **`Cmd+Y`** |
+| Save | Persistent **Save** button in edit mode or `Ctrl+S` / **Cmd+S** |
 | Bold / italic / font / size | Floating `#rteToolbar` when text is focused |
 | Save to localStorage + file | `Ctrl+S` saves the full `.slides-offset` structure as a browser draft, then writes a portable HTML file via File System Access when available or downloads a fallback HTML |
 | Export HTML | Sidebar button in reference; export strips edit-mode / selected-state classes and embeds the current deck state in `#deck-persisted-state` |
@@ -198,11 +199,13 @@ The reference implementation uses a **command stack** with `undo()` / `redo()` a
 7. Keep `serializeDeckState()`, `buildStandaloneHtml()`, `#deck-persisted-state`, File System Access save, and download fallback intact. The exported file is **portable, single-file, and self-contained** (no external font links) and carries the latest edited deck even with empty localStorage in another browser. It retains Laser/Fullscreen functionality but is **trail-free** and never embeds active laser state (the dot-only laser creates no trail nodes to strip).
 8. After generating, verify at 1280×720: no slide overflow, handles visible only in edit mode.
 9. Set `<html data-mobile-adaptation="desktop-default">` unless Phase 1 explicitly selected phone support; for phone support set `enabled` and include portrait + landscape media rules from the reference runtime.
+10. For full editing, set `data-template-edit-mode="components"`, follow [component-edit-mode.md](component-edit-mode.md), keep Edit/Pages visible, support double-click entry, keep page-turn buttons active in edit mode, and verify per-slide motion plus linked data graphics.
 
 ## Files
 
 | File | Role |
 |------|------|
 | [examples/editable-deck-reference.html](examples/editable-deck-reference.html) | Single-file working reference |
+| [component-edit-mode.md](component-edit-mode.md) | Full componentization, direct editing UX, page motion/navigation, linked chart QA |
 | [html-template.md](html-template.md) | Architecture notes + link to reference |
 | [viewport-base.css](viewport-base.css) | Mandatory slide sizing |

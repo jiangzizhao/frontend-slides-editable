@@ -9,8 +9,8 @@ Reference architecture for generating slide presentations.
 **Do this instead:**
 
 1. Read **[editor-runtime.md](editor-runtime.md)** and **[examples/editable-deck-reference.html](examples/editable-deck-reference.html)**.
-2. Jump to **[§ Editable deck](#editable-deck-frontend-slides-editable)** in this file — deck root (e.g. `.slides-offset`), `:scope > section.slide`, full runtime JS, and the hover/hotzone pattern.
-3. Use the sections below only where they remain valid: **Image Pipeline**, **Code Quality**, **File Structure**, and the **400ms hotzone** snippet (wired to the reference’s `#deckLeftHover` / edit chrome).
+2. Jump to **[§ Editable deck](#editable-deck-frontend-slides-editable)** in this file — deck root (e.g. `.slides-offset`), `:scope > section.slide`, full runtime JS, and persistent direct-edit controls.
+3. Use the sections below only where they remain valid: **Image Pipeline**, **Code Quality**, **File Structure**, and optional hover reveal for secondary presentation tools.
 
 The **parent `frontend-slides` skill** (read-only) may still use the legacy layout in § Base HTML Structure; this editable fork **always** ships the full editor unless the user explicitly switched skills.
 
@@ -179,86 +179,59 @@ Every presentation must include:
 
 4. **`frontend-slides-editable`:** Ignore the minimal "inline editing" bullet list — use the **full** runtime in § Editable deck (`SlideDeck`, `SlideObjectEditor`, sidebar, export). **`frontend-slides` (read-only):** optional light inline text save only if that skill’s Phase 1 says so; skip editor chrome otherwise.
 
-## Hover reveal for edit controls (required pattern)
+## Persistent edit controls and optional hover extras
 
-**Scope:** Applies to **both** the lightweight read-only skill (if it adds a toggle) and **`frontend-slides-editable`** (reference: `#deckLeftHover`, `#editToggle`, `#deckEditChrome`).
+**Scope:** Applies to **`frontend-slides-editable`** (reference: `#deckLeftHover`, `#editToggle`, `#pagesToggle`, `#deckEditChrome`).
 
-**Do NOT use CSS `~` sibling selector for hover-based show/hide.** The CSS-only approach (`edit-hotzone:hover ~ .edit-toggle`) fails because `pointer-events: none` on the toggle button breaks the hover chain: user hovers hotzone → button becomes visible → mouse moves toward button → leaves hotzone → button disappears before click.
+Keep **Edit** and **Pages** visible without hover discovery. While editing, keep Undo, Redo, Done, Save, and Add element visible. Laser and Fullscreen may use delayed hover reveal as secondary presentation tools; do not use the CSS `~` sibling selector for that behavior.
 
-**Required approach: JS-based hover with 400ms delay timeout.**
-
-Minimal HTML (editable deck adds **Pages**, **Save**, Undo/Redo — see reference):
+Minimal HTML:
 ```html
-<div class="edit-hotzone"></div>
-<button class="edit-toggle" id="editToggle" title="Edit mode (E)">✏️</button>
+<div class="deck-left-hover-anchor" id="deckLeftHover">
+  <button class="edit-toggle" id="editToggle" type="button">Edit</button>
+  <button class="sidebar-pages-toggle" id="pagesToggle" type="button">Pages</button>
+  <button class="deck-btn-present" id="laserToggle" type="button">Laser</button>
+  <button class="deck-btn-present" id="fullscreenToggle" type="button">Fullscreen</button>
+  <div class="deck-edit-chrome" id="deckEditChrome">…</div>
+</div>
 ```
 
-CSS (visibility controlled by JS classes only):
+CSS:
 ```css
-/* Do NOT use CSS ~ sibling selector for this!
-   pointer-events: none breaks the hover chain.
-   Must use JS with delay timeout. */
-.edit-hotzone {
-    position: fixed; top: 0; left: 0;
-    width: 80px; height: 80px;
-    z-index: 10000;
-    cursor: pointer;
-}
-.edit-toggle {
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity 0.3s ease;
-    z-index: 10001;
-}
-.edit-toggle.show,
-.edit-toggle.active {
-    opacity: 1;
-    pointer-events: auto;
-}
+.edit-toggle,
+.sidebar-pages-toggle { opacity: 1; pointer-events: auto; }
+body.deck-edit-mode .deck-edit-chrome,
+body.deck-edit-mode .deck-btn-save,
+body.deck-edit-mode .deck-btn-add { opacity: 1; pointer-events: auto; }
+.deck-btn-present { opacity: 0; pointer-events: none; }
+.deck-btn-present.show,
+.deck-btn-present.active { opacity: 1; pointer-events: auto; }
 ```
 
-JS (three interaction methods):
+JS (toggle plus direct editing):
 ```javascript
-// 1. Click handler on the toggle button
 document.getElementById('editToggle').addEventListener('click', () => {
-    editor.toggleEditMode();
+  if (editor.active) exitEditMode();
+  else enterEditMode();
 });
 
-// 2. Hotzone hover with 400ms grace period
-const hotzone = document.querySelector('.edit-hotzone');
-const editToggle = document.getElementById('editToggle');
-let hideTimeout = null;
-
-hotzone.addEventListener('mouseenter', () => {
-    clearTimeout(hideTimeout);
-    editToggle.classList.add('show');
-});
-hotzone.addEventListener('mouseleave', () => {
-    hideTimeout = setTimeout(() => {
-        if (!editor.isActive) editToggle.classList.remove('show');
-    }, 400);
-});
-editToggle.addEventListener('mouseenter', () => {
-    clearTimeout(hideTimeout);
-});
-editToggle.addEventListener('mouseleave', () => {
-    hideTimeout = setTimeout(() => {
-        if (!editor.isActive) editToggle.classList.remove('show');
-    }, 400);
+document.addEventListener('dblclick', (event) => {
+  if (editor.active || isDeckChromeNode(event.target)) return;
+  const object = event.target.closest('[data-slide-object]');
+  if (!object || !object.closest('.slides-offset > section.slide')) return;
+  enterEditMode();
+  editor.selectAndFocus(object);
 });
 
-// 3. Hotzone direct click
-hotzone.addEventListener('click', () => {
-    editor.toggleEditMode();
-});
-
-// 4. Keyboard shortcut (E key, skip when editing text)
 document.addEventListener('keydown', (e) => {
-    if ((e.key === 'e' || e.key === 'E') && !e.target.getAttribute('contenteditable')) {
-        editor.toggleEditMode();
-    }
+  if ((e.key === 'e' || e.key === 'E') && !e.target.closest('[contenteditable="true"]')) {
+    if (editor.active) exitEditMode();
+    else enterEditMode();
+  }
 });
 ```
+
+For full component editing, follow [component-edit-mode.md](component-edit-mode.md). Keep previous/next navigation active in edit mode and do not auto-open the Pages sidebar on edit entry.
 
 ## Image Pipeline (skip if no image assets)
 
@@ -376,8 +349,9 @@ When using the **frontend-slides-editable** skill, every generated deck **must**
 7. Copy **JavaScript** from the reference `<script>` block; keep `STORAGE_KEY` based on `<html data-deck-id="…">` or document title. Persist the whole `.slides-offset` structure, not just individual slide bodies, so reorder/delete survives reload.
    - Keep `serializeDeckState()`, `buildStandaloneHtml()`, `#deck-persisted-state`, `showSaveFilePicker`, and `downloadHtml()` intact. Exported files must load the latest edited deck even in a browser with empty localStorage.
    - If any generated media begins life under `assets/`, convert it to a `data:` URL before writing the HTML.
-8. Wire **Edit** / **Pages** / **Laser** / **Fullscreen** / **#deckEditChrome** (Done, Undo, Redo) and hotzone using the **JS hover pattern** documented below (no CSS `~` for toggle visibility).
+8. Wire persistent **Edit** / **Pages**, persistent edit-mode **#deckEditChrome** (Done, Undo, Redo), optional hover-revealed **Laser** / **Fullscreen**, double-click direct editing, and explicit previous/next page controls.
 9. Set `data-mobile-adaptation="desktop-default"` on `<html>` unless the required Phase 1 mobile answer says to support phones; then set `enabled` and include portrait + landscape media rules.
+10. For `data-template-edit-mode="components"`, follow [component-edit-mode.md](component-edit-mode.md): measure all semantic nodes before moving them, componentize on load, keep structural layers locked, and verify per-slide motion plus linked chart values.
 
 ### Regression guard (slide list / filmstrip)
 
@@ -385,13 +359,15 @@ Thumbnails **clone** full `<section class="slide">` nodes into the sidebar. If t
 
 **Required:** Resolve the deck root once (e.g. `.slides-offset`) and use **`root.querySelectorAll(':scope > section.slide')`** for enumeration, reorder, and save/load. In **`SlideSidebar.refresh()`**, clear `#filmstripList` **before** calling `deck.refreshSlides()`. See [editor-runtime.md](editor-runtime.md) §Deck queries.
 
-**Z-index / layout:** Presets often use **top-left** slide numbers or nav. Nest **`#deckEditChrome`** (Undo / Redo / Done) inside **`#deckLeftHover`** with **Edit** / **Pages** / **Laser** / **Fullscreen** so one hover region reveals the whole cluster; keep `z-index` high enough that it does not sit under decorative layers.
+**Z-index / layout:** Presets often use **top-left** slide numbers or nav. Nest **`#deckEditChrome`** (Undo / Redo / Done) inside **`#deckLeftHover`** with **Edit** / **Pages** / **Laser** / **Fullscreen** so the persistent edit controls share one stable cluster; keep `z-index` high enough that it does not sit under decorative layers.
 
-### Inline editing UI (required pattern)
+### Direct editing UI (required pattern)
 
-Same hotzone + **400ms** delayed hide as in **§ Hover reveal for edit controls** above. The editable skill **adds**:
+The editable skill **adds**:
 
-- **`#deckLeftHover`** — fixed **top-left** wrapper; hover reveals **Edit**, **Pages**, **Laser**, **Fullscreen**, **`#btnSave`** (edit mode only), and **`#deckEditChrome`** (**Undo**, **Redo**, **Done**) (see reference). No separate bottom-right save bar.
+- **`#deckLeftHover`** — fixed **top-left** wrapper. **Edit** and **Pages** are always visible; **Save**, **Add element**, and **#deckEditChrome** (**Undo**, **Redo**, **Done**) stay visible in edit mode. Laser and Fullscreen may use delayed hover reveal. No separate bottom-right save bar.
+- **Direct entry** — `E` toggles edit mode; double-clicking any authored `[data-slide-object]` enters edit mode, selects it, and focuses text when applicable. Entering edit mode does not automatically open Pages.
+- **Page turn controls** — explicit previous/next buttons and current/total counter remain active in edit mode.
 - **`#laserToggle` / `#deckLaserLayer`** — presentation-mode dot-only laser pointer. Export must keep the feature but strip any active laser state; no trail DOM should be created.
 - **`#fullscreenToggle`** — uses `document.documentElement.requestFullscreen()` and `fullscreenchange` to sync active state.
 - **`#pagesToggle`** next to `#editToggle` for the slide sidebar.

@@ -10,9 +10,9 @@
 A Claude Code / Codex skill for creating stunning, animation-rich, single-file HTML presentations with a built-in browser editor: drag objects, resize blocks, edit text, reorder slides, save locally, and export a clean standalone HTML.
 
 <p>
-  <a href="https://github.com/archlizheng/frontend-slides-editable/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/archlizheng/frontend-slides-editable?style=social" /></a>
-  <a href="https://github.com/archlizheng/frontend-slides-editable/blob/main/LICENSE"><img alt="License" src="https://img.shields.io/github/license/archlizheng/frontend-slides-editable?color=22c55e" /></a>
-  <a href="https://github.com/archlizheng/frontend-slides-editable/commits/main"><img alt="Last commit" src="https://img.shields.io/github/last-commit/archlizheng/frontend-slides-editable?color=2563eb" /></a>
+  <a href="https://github.com/jiangzizhao/frontend-slides-editable/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/jiangzizhao/frontend-slides-editable?style=social" /></a>
+  <a href="https://github.com/jiangzizhao/frontend-slides-editable/blob/main/LICENSE"><img alt="License" src="https://img.shields.io/github/license/jiangzizhao/frontend-slides-editable?color=22c55e" /></a>
+  <a href="https://github.com/jiangzizhao/frontend-slides-editable/commits/main"><img alt="Last commit" src="https://img.shields.io/github/last-commit/jiangzizhao/frontend-slides-editable?color=2563eb" /></a>
   <img alt="Claude Code and Codex skill" src="https://img.shields.io/badge/Skill-Claude%20Code%20%2F%20Codex-111827" />
   <img alt="Single-file HTML output" src="https://img.shields.io/badge/Output-single--file%20HTML-f97316" />
   <img alt="46 presets" src="https://img.shields.io/badge/Presets-46-8b5cf6" />
@@ -41,9 +41,12 @@ A Claude Code / Codex skill for creating stunning, animation-rich, single-file H
 
 </div>
 
+> This community fork builds on [archlizheng/frontend-slides-editable](https://github.com/archlizheng/frontend-slides-editable) and keeps the upstream license and history. It adds PPT-like component editing: authored elements can be selected, moved, resized, edited, animated per slide, and exported as standalone HTML.
+
 ## 目录 · Table of contents
 
 - [v2.0 更新摘要 · Release 2.0 highlights](#toc-highlights)
+- [全元素编辑增强 · Direct component editing](#toc-components)
 - [这个 Skill 是做什么的 · What this does](#toc-what)
 - [安装 · Installation](#toc-installation)
 - [用法 · Usage](#toc-usage)
@@ -91,6 +94,23 @@ This release bumps the editable runtime and authoring workflow to **2.0**: stron
 
 参考实现仍以单文件 **`examples/editable-deck-reference.html`** 为契约；生成新 deck 时请继续遵循本仓库 `SKILL.md` 与 `editor-runtime.md`。
 The reference contract remains the single file **`examples/editable-deck-reference.html`**; follow `SKILL.md` and `editor-runtime.md` when generating new decks.
+
+<a id="toc-components"></a>
+## 全元素编辑增强 · Direct Component Editing
+
+- **全元素可编辑**：标题、正文、卡片、指标、图形、图片与图表数值可拆分为独立对象，并支持选择、移动、缩放、删除和文本修改。
+- **直接进入编辑**：Edit 与 Pages 始终可见；按 `E` 切换编辑模式，双击对象可直接进入编辑并选中。
+- **编辑时翻页**：上一页、下一页、页码与键盘导航在编辑模式中继续可用；进入编辑不会自动打开 Pages。
+- **逐页动效**：每一页拥有独立入场动效，翻页后只重播当前页；编辑模式暂停动画，并尊重 `prefers-reduced-motion`。
+- **图表联动**：修改图表数值后，对应柱形、折线或标签同步更新。
+- **可移植 HTML**：保存与导出都会保留当前编辑状态，并生成无需构建步骤的独立单文件 HTML。
+
+- **Editable components**: authored text, cards, metrics, graphics, images, and chart values can become independent objects with select, move, resize, delete, and inline text editing.
+- **Direct entry**: Edit and Pages stay visible; press `E` to toggle edit mode or double-click an object to enter and select it.
+- **Navigation while editing**: previous/next controls, page count, and keyboard navigation remain active; edit mode does not force the Pages sidebar open.
+- **Per-slide motion**: navigation replays only the current slide's entrance motion; editing pauses motion and respects `prefers-reduced-motion`.
+- **Linked charts**: changing a chart value updates its corresponding bar, line, or label.
+- **Portable HTML**: save and export preserve the edited state in a standalone single-file HTML document.
 
 <a id="toc-what"></a>
 ## 这个 Skill 是做什么的 / What This Does
@@ -201,7 +221,7 @@ Use **frontend-slides** when you want:
 <a id="toc-installation"></a>
 ## 安装 / Installation
 
-仓库地址：**https://github.com/archlizheng/frontend-slides-editable**
+仓库地址：**https://github.com/jiangzizhao/frontend-slides-editable**
 
 前置要求：需要先安装 **Node.js**（建议 LTS，Node 18+）；`npx` 会随 Node.js 一起安装。
 
@@ -210,7 +230,7 @@ Prerequisite: install **Node.js** first (LTS recommended, Node 18+); `npx` is in
 ### 一条命令（推荐） / One command (recommended)
 
 ```bash
-npx skills add archlizheng/frontend-slides-editable
+npx skills add jiangzizhao/frontend-slides-editable
 ```
 
 如果你的环境里 `skills` CLI 版本支持 URL，也可以用：
@@ -218,7 +238,7 @@ npx skills add archlizheng/frontend-slides-editable
 If your `skills` CLI supports URL sources, you can also run:
 
 ```bash
-npx skills add https://github.com/archlizheng/frontend-slides-editable
+npx skills add https://github.com/jiangzizhao/frontend-slides-editable
 ```
 
 如果仓库里未来包含多个 skill，可指定名称安装：
@@ -226,7 +246,7 @@ npx skills add https://github.com/archlizheng/frontend-slides-editable
 If this repo contains multiple skills in the future, install by name:
 
 ```bash
-npx skills add https://github.com/archlizheng/frontend-slides-editable --skill frontend-slides-editable
+npx skills add https://github.com/jiangzizhao/frontend-slides-editable --skill frontend-slides-editable
 ```
 
 ### 验证安装 / Verify installation
@@ -253,14 +273,14 @@ If `npx skills add` is unavailable, install manually.
 
 ```bash
 mkdir -p ~/.codex/skills
-git clone https://github.com/archlizheng/frontend-slides-editable.git ~/.codex/skills/frontend-slides-editable
+git clone https://github.com/jiangzizhao/frontend-slides-editable.git ~/.codex/skills/frontend-slides-editable
 ```
 
 **Claude Code**
 
 ```bash
 mkdir -p ~/.claude/skills
-git clone https://github.com/archlizheng/frontend-slides-editable.git ~/.claude/skills/frontend-slides-editable
+git clone https://github.com/jiangzizhao/frontend-slides-editable.git ~/.claude/skills/frontend-slides-editable
 ```
 
 若目标目录已存在，请先删除旧目录，或进入目录执行 `git pull` 更新。
@@ -957,11 +977,11 @@ Then try:
 
 If you like this project, consider starring it on GitHub so more people can discover editable HTML decks.
 
-<a href="https://www.star-history.com/#archlizheng/frontend-slides-editable&amp;Date">
+<a href="https://www.star-history.com/#jiangzizhao/frontend-slides-editable&amp;Date">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=archlizheng/frontend-slides-editable&amp;type=Date&amp;theme=dark" />
-    <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=archlizheng/frontend-slides-editable&amp;type=Date" />
-    <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=archlizheng/frontend-slides-editable&amp;type=Date" />
+    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=jiangzizhao/frontend-slides-editable&amp;type=Date&amp;theme=dark" />
+    <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=jiangzizhao/frontend-slides-editable&amp;type=Date" />
+    <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=jiangzizhao/frontend-slides-editable&amp;type=Date" />
   </picture>
 </a>
 

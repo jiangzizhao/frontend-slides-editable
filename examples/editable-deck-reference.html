@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-deck-id="editable-deck-reference" data-mobile-adaptation="desktop-default">
+<html lang="en" data-deck-id="editable-deck-reference" data-mobile-adaptation="desktop-default" data-template-edit-mode="components">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -185,7 +185,53 @@
     }
     .nav-dots button.active { background: var(--deck-chrome-accent); transform: scale(1.15); }
 
-    /* === top-left cluster: hover reveals Edit / Pages / (in edit mode) Undo·Redo·Done === */
+    .page-turn-nav {
+      position: fixed;
+      right: clamp(0.6rem, 1.4vw, 1rem);
+      bottom: clamp(0.6rem, 1.6vh, 1rem);
+      z-index: 9001;
+      display: flex;
+      align-items: center;
+      gap: 0.45rem;
+    }
+    .page-turn-nav button,
+    .page-turn-nav span {
+      min-width: 38px;
+      min-height: 38px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid var(--deck-chrome-border);
+      border-radius: 8px;
+      background: var(--deck-chrome-bg);
+      color: var(--deck-chrome-text);
+      box-shadow: var(--deck-chrome-shadow);
+    }
+    .page-turn-nav button { cursor: pointer; }
+    .page-turn-nav button:disabled { opacity: 0.4; cursor: default; }
+    .page-turn-nav span { min-width: 74px; font-size: clamp(0.68rem, 1vw, 0.82rem); }
+    body.deck-edit-mode .page-turn-nav { opacity: 1; pointer-events: auto; }
+
+    body:not(.deck-edit-mode) .slide.is-motion-active [data-motion-item] {
+      animation-duration: 650ms;
+      animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+      animation-fill-mode: both;
+      animation-delay: calc(var(--motion-i, 0) * 70ms);
+    }
+    body:not(.deck-edit-mode) .slide[data-motion="rise"].is-motion-active [data-motion-item] { animation-name: deck-rise; }
+    body:not(.deck-edit-mode) .slide[data-motion="split"].is-motion-active [data-motion-item]:nth-child(odd) { animation-name: deck-left; }
+    body:not(.deck-edit-mode) .slide[data-motion="split"].is-motion-active [data-motion-item]:nth-child(even) { animation-name: deck-right; }
+    body:not(.deck-edit-mode) .slide[data-motion="pop"].is-motion-active [data-motion-item] { animation-name: deck-pop; }
+    @keyframes deck-rise { from { opacity: 0; transform: translateY(34px); } to { opacity: 1; transform: none; } }
+    @keyframes deck-left { from { opacity: 0; transform: translateX(-44px); } to { opacity: 1; transform: none; } }
+    @keyframes deck-right { from { opacity: 0; transform: translateX(44px); } to { opacity: 1; transform: none; } }
+    @keyframes deck-pop { from { opacity: 0; transform: scale(0.82) rotate(-2deg); } to { opacity: 1; transform: none; } }
+    body.deck-edit-mode [data-motion-item] { animation: none !important; transform: none !important; opacity: 1 !important; }
+    @media (prefers-reduced-motion: reduce) {
+      [data-motion-item] { animation: none !important; transform: none !important; opacity: 1 !important; }
+    }
+
+    /* === top-left cluster: persistent Edit/Pages; hover only for secondary presentation tools === */
     .deck-left-hover-anchor {
       position: fixed;
       top: 0;
@@ -215,7 +261,7 @@
       scrollbar-width: thin;
     }
 
-    /* === edit mode row: Undo / Redo / Done (top-left, hover-revealed) === */
+    /* === edit mode row: persistent Undo / Redo / Done === */
     .deck-edit-chrome {
       display: none;
       align-items: center;
@@ -231,6 +277,8 @@
     }
     body.deck-edit-mode .deck-edit-chrome {
       display: flex;
+      opacity: 1;
+      pointer-events: auto;
     }
     body.deck-edit-mode .deck-edit-chrome.show {
       opacity: 1;
@@ -292,6 +340,33 @@
     .deck-btn-present.show, .deck-btn-present.active,
     body.deck-edit-mode .deck-btn-save.show,
     body.deck-edit-mode .deck-btn-add.show { opacity: 1; pointer-events: auto; }
+    .edit-toggle,
+    .sidebar-pages-toggle {
+      opacity: 1;
+      pointer-events: auto;
+    }
+    body.deck-edit-mode .deck-btn-save,
+    body.deck-edit-mode .deck-btn-add {
+      opacity: 1;
+      pointer-events: auto;
+    }
+    .edit-help-toast {
+      position: fixed;
+      top: clamp(0.45rem, 1.3vh, 0.8rem);
+      right: clamp(0.55rem, 1.3vw, 1rem);
+      z-index: 10001;
+      display: none;
+      padding: 0.45rem 0.75rem;
+      border: 1px solid var(--deck-chrome-border);
+      border-radius: 8px;
+      background: var(--deck-chrome-bg);
+      color: var(--deck-chrome-text);
+      box-shadow: var(--deck-chrome-shadow);
+      font-size: clamp(0.68rem, 1vw, 0.82rem);
+      white-space: nowrap;
+      pointer-events: none;
+    }
+    body.deck-edit-mode .edit-help-toast { display: block; }
     .deck-btn-present.active {
       border-color: color-mix(in srgb, var(--deck-chrome-accent) 70%, var(--deck-chrome-border));
       background: color-mix(in srgb, var(--deck-chrome-accent) 20%, var(--deck-chrome-bg));
@@ -697,7 +772,7 @@
 
 <div class="deck-left-hover-anchor" id="deckLeftHover" aria-label="Deck controls">
   <div class="deck-left-row">
-    <button type="button" class="edit-toggle" id="editToggle" title="Edit mode (E) — hover this corner to show">Edit</button>
+    <button type="button" class="edit-toggle" id="editToggle" title="Toggle direct editing (E)">Edit elements</button>
     <button type="button" class="sidebar-pages-toggle" id="pagesToggle" title="Pages sidebar">Pages</button>
     <button type="button" class="deck-btn-present" id="laserToggle" title="Laser pointer">Laser</button>
     <button type="button" class="deck-btn-present" id="fullscreenToggle" title="Enter fullscreen">Fullscreen</button>
@@ -716,6 +791,8 @@
   </div>
 </div>
 
+<div class="edit-help-toast" id="editHelpToast">Click text to edit · drag ⠿ to move · drag handles to resize · double-click an object to edit</div>
+
 <div class="deck-add-element-menu" id="deckAddElementMenu" data-deck-chrome-surface="" role="menu" aria-label="Add element" hidden>
   <button type="button" role="menuitem" data-add-kind="text">Text</button>
   <button type="button" role="menuitem" data-add-kind="image">Image</button>
@@ -724,6 +801,11 @@
 
 <div class="progress-bar" id="progressBar"></div>
 <nav class="nav-dots" id="navDots" aria-label="Slides"></nav>
+<nav class="page-turn-nav" id="pageTurnNav" aria-label="Page navigation">
+  <button type="button" id="prevSlideBtn" aria-label="Previous slide" title="Previous slide (←)">←</button>
+  <span id="pageTurnCounter" aria-live="polite">01 / 03</span>
+  <button type="button" id="nextSlideBtn" aria-label="Next slide" title="Next slide (→)">→</button>
+</nav>
 <div class="deck-laser-layer" id="deckLaserLayer" aria-hidden="true">
   <div class="laser-dot" id="laserDot"></div>
 </div>
@@ -786,7 +868,7 @@
 </div>
 
 <div class="slides-offset">
-<section class="slide visible" id="slide-0">
+<section class="slide visible" id="slide-0" data-motion="rise">
   <div class="slide-edit-layer">
     <div class="slide-object" data-slide-object data-oid="s0-o0" data-object-type="text"
          style="left:8%;top:18%;width:84%;">
@@ -798,7 +880,7 @@
          style="left:8%;top:42%;width:70%;">
       <button type="button" class="slide-object-move" aria-label="Move">⠿</button>
       <button type="button" class="slide-object-resize" aria-label="Resize"></button>
-      <div class="slide-object-text" contenteditable="false">Press <strong>E</strong> for edit mode. Hover the <strong>top-left</strong> for Edit, Pages, <strong>Save</strong>, then Undo / Redo / <strong>Done</strong> (exit). <strong>Ctrl+S</strong> also saves. <strong>Esc</strong> blurs text or exits. <strong>Ctrl+click</strong> multi-select. Drag ⠿ to move; drag corner to resize.</div>
+      <div class="slide-object-text" contenteditable="false">Click <strong>Edit elements</strong>, press <strong>E</strong>, or double-click an object. Edit and Pages stay visible; editing keeps page-turn buttons active. <strong>Ctrl+S</strong> saves. <strong>Esc</strong> blurs text or exits. <strong>Ctrl+click</strong> multi-select. Drag ⠿ to move; drag handles to resize.</div>
     </div>
     <div class="slide-object" data-slide-object data-oid="s0-o2" data-object-type="graphic"
          style="left:55%;top:58%;width:35%;height:120px;">
@@ -809,7 +891,7 @@
   </div>
 </section>
 
-<section class="slide" id="slide-1">
+<section class="slide" id="slide-1" data-motion="split">
   <div class="slide-edit-layer">
     <div class="slide-object" data-slide-object data-oid="s1-o0" data-object-type="text" style="left:10%;top:20%;width:80%;">
       <button type="button" class="slide-object-move" aria-label="Move">⠿</button>
@@ -824,7 +906,7 @@
   </div>
 </section>
 
-<section class="slide" id="slide-2">
+<section class="slide" id="slide-2" data-motion="pop">
   <div class="slide-edit-layer">
     <div class="slide-object" data-slide-object data-oid="s2-o0" data-object-type="text" style="left:10%;top:35%;width:80%;">
       <button type="button" class="slide-object-move" aria-label="Move">⠿</button>
@@ -1010,6 +1092,7 @@
       this.slides.forEach((s) => this._obs.observe(s));
       this._onScroll = () => this._syncCurrentFromScroll();
       window.addEventListener('scroll', this._onScroll, { passive: true });
+      this.slidesContainer.addEventListener('scroll', this._onScroll, { passive: true });
       this._keys = this._keys.bind(this);
       window.addEventListener('keydown', this._keys);
       this._wheel = this._wheel.bind(this);
@@ -1034,6 +1117,7 @@
         this.current = best;
         this.onSlideChange && this.onSlideChange(best);
       }
+      this.slides.forEach((slide, index) => slide.classList.toggle('is-active', index === best));
       this._updateChrome();
     }
     goTo(i) {
@@ -1041,6 +1125,7 @@
       i = Math.max(0, Math.min(this.slides.length - 1, i));
       this.slides[i].scrollIntoView({ behavior: prefersReducedMotion() ? 'auto' : 'smooth' });
       this.current = i;
+      this.slides.forEach((slide, index) => slide.classList.toggle('is-active', index === i));
       this._updateChrome();
       this.onSlideChange && this.onSlideChange(i);
     }
@@ -1061,19 +1146,29 @@
           dots.appendChild(b);
         }
       }
+      const prev = document.getElementById('prevSlideBtn');
+      const next = document.getElementById('nextSlideBtn');
+      const counter = document.getElementById('pageTurnCounter');
+      if (prev) prev.disabled = this.current <= 0;
+      if (next) next.disabled = this.current >= Math.max(0, n - 1);
+      if (counter) {
+        const now = String(Math.min(n, this.current + 1)).padStart(2, '0');
+        const all = String(n).padStart(2, '0');
+        counter.textContent = now + ' / ' + all;
+      }
     }
     _keys(e) {
       if (document.body.classList.contains('deck-edit-mode')) {
         if (e.target.closest('.slide-object-text[contenteditable="true"]')) return;
-        if (e.key === 'ArrowDown' || e.key === 'PageDown' || e.key === ' ') {
+        if (e.key === 'ArrowDown' || e.key === 'ArrowRight' || e.key === 'PageDown' || e.key === ' ') {
           e.preventDefault(); this.goTo(this.current + 1);
-        } else if (e.key === 'ArrowUp' || e.key === 'PageUp') {
+        } else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft' || e.key === 'PageUp') {
           e.preventDefault(); this.goTo(this.current - 1);
         }
       } else {
-        if (e.key === 'ArrowDown' || e.key === 'PageDown' || e.key === ' ') {
+        if (e.key === 'ArrowDown' || e.key === 'ArrowRight' || e.key === 'PageDown' || e.key === ' ') {
           e.preventDefault(); this.goTo(this.current + 1);
-        } else if (e.key === 'ArrowUp' || e.key === 'PageUp') {
+        } else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft' || e.key === 'PageUp') {
           e.preventDefault(); this.goTo(this.current - 1);
         }
       }
@@ -1084,6 +1179,29 @@
       e.preventDefault();
       if (e.deltaY > 0) this.goTo(this.current + 1);
       else this.goTo(this.current - 1);
+    }
+  }
+
+  class DeckMotionDirector {
+    constructor(deckInstance) {
+      this.deck = deckInstance;
+    }
+    refresh() {
+      this.deck.refreshSlides();
+      this.deck.slides.forEach((slide) => {
+        Array.from(slide.querySelectorAll(':scope > .slide-edit-layer > [data-slide-object]')).forEach((obj, index) => {
+          obj.setAttribute('data-motion-item', '');
+          obj.style.setProperty('--motion-i', String(index));
+        });
+      });
+    }
+    play(index) {
+      this.refresh();
+      const slide = this.deck.slides[index];
+      if (!slide) return;
+      this.deck.slides.forEach((item) => item.classList.remove('is-motion-active'));
+      void slide.offsetWidth;
+      requestAnimationFrame(() => slide.classList.add('is-motion-active'));
     }
   }
 
@@ -2861,10 +2979,17 @@
   const deck = new SlideDeck();
   const editor = new SlideObjectEditor(deck, history);
   const sidebar = new SlideSidebar(deck, history);
+  const motionDirector = new DeckMotionDirector(deck);
+  const prevSlideBtn = document.getElementById('prevSlideBtn');
+  const nextSlideBtn = document.getElementById('nextSlideBtn');
+  if (prevSlideBtn) prevSlideBtn.addEventListener('click', () => deck.goTo(deck.current - 1));
+  if (nextSlideBtn) nextSlideBtn.addEventListener('click', () => deck.goTo(deck.current + 1));
   const laserPointer = new LaserPointerController(laserToggle);
   const fullscreenController = new FullscreenController(fullscreenToggle);
 
   ensureObjectControls(document);
+  motionDirector.refresh();
+  motionDirector.play(deck.current);
   editor.bind();
   laserPointer.bind();
   fullscreenController.bind();
@@ -3463,6 +3588,8 @@
     closeAddElementMenu();
     editor.setActive(false);
     editToggle.classList.remove('active');
+    editToggle.textContent = 'Edit elements';
+    editToggle.title = 'Toggle direct editing (E)';
     pagesToggle.classList.remove('active');
     sidebar.setOpen(false);
     editToggle.classList.remove('show');
@@ -3480,18 +3607,22 @@
     laserPointer.setActive(false);
     editor.setActive(true);
     editToggle.classList.add('active');
-    sidebar.setOpen(true);
+    editToggle.textContent = 'Exit editing';
+    editToggle.title = 'Exit direct editing (E)';
+    sidebar.setOpen(false);
+    pagesToggle.classList.remove('active');
     updateUndoRedoChrome();
   }
 
   loadState();
 
-  deck.onSlideChange = () => {
+  deck.onSlideChange = (index) => {
     if (sidebar.open) sidebar.refresh();
     deck._updateChrome();
+    motionDirector.play(index);
   };
 
-  /* Top-left cluster: hover reveals controls (Edit / Pages / in edit mode Undo·Redo·Done) */
+  /* Top-left cluster: Edit/Pages and edit actions stay visible; hover reveals secondary tools. */
   let hideT = null;
   function showToggles() {
     clearTimeout(hideT);
@@ -3549,7 +3680,27 @@
   }
 
   editToggle.addEventListener('click', () => {
-    if (!editor.active) enterEditMode();
+    if (editor.active) exitEditMode();
+    else enterEditMode();
+  });
+
+  document.addEventListener('dblclick', (e) => {
+    if (editor.active || isDeckChromeNode(e.target)) return;
+    const obj = e.target.closest && e.target.closest('[data-slide-object]');
+    if (!obj || !obj.closest('.slides-offset > section.slide')) return;
+    e.preventDefault();
+    e.stopPropagation();
+    enterEditMode();
+    editor._selectOnly(obj);
+    if (obj.getAttribute('data-object-type') === 'text') {
+      const textEl = obj.querySelector('.slide-object-text');
+      if (textEl) {
+        if (textEl.dataset._deckHtmlBefore === undefined) textEl.dataset._deckHtmlBefore = textEl.innerHTML;
+        textEl.contentEditable = 'true';
+        textEl.focus();
+        editor._updateRteToolbar();
+      }
+    }
   });
 
   pagesToggle.addEventListener('click', () => {

@@ -1,12 +1,12 @@
 ---
 name: frontend-slides-editable
-description: Use when the user wants a single-file HTML presentation that stays editable in the browser after generation, or needs object-level layout editing, slide reordering, local save/export, or PPT/PDF-to-web conversion with continued editing.
+description: Use when the user wants a single-file HTML presentation that stays editable in the browser after generation, especially PPT-like direct editing where authored text, cards, shapes, images, and chart values can be independently changed, moved, resized, animated, reordered, saved, or exported; also use for PPT/PDF-to-web conversion with continued editing.
 ---
 
 <objective>
 Frontend Slides (Editable)
 
-Create zero-dependency, animation-rich HTML presentations that run entirely in the browser **with a built-in editor**: move objects, multi-select with **Ctrl+click**, alignment snapping, simple text formatting with **font family + size controls**, **undo/redo**, a **Pages** sidebar (slide thumbnails, drag to reorder, delete), presentation tools (**Laser** pointer and **Fullscreen**), **Ctrl+S** persistence, and **export HTML**.
+Create zero-dependency, animation-rich HTML presentations that run entirely in the browser **with a built-in editor**: persistent visible edit controls, double-click direct editing, move/resize/delete objects, multi-select with **Ctrl+click**, alignment snapping, simple text formatting with **font family + size controls**, **undo/redo**, explicit previous/next page controls, a **Pages** sidebar (slide thumbnails, drag to reorder, delete), presentation tools (**Laser** pointer and **Fullscreen**), **Ctrl+S** persistence, and **export HTML**.
 
 This skill is a **copy of the `frontend-slides` skill** extended with the editable deck runtime. For read-only decks without editor weight, use the original **`frontend-slides`** skill instead (same skills directory layout).
 </objective>
@@ -31,21 +31,21 @@ Real-template ports (slot-editable)
 
 For the 34 ported presets from `beautiful-html-templates`, prefer the upstream template's **mood / tone / density** and visual grammar over color-token matching alone.
 
-Interaction baseline: ported decks must use the same Swiss/reference editor chrome and object editor as `examples/editable-deck-reference.html` / `swiss-modern.html`. Native template slots are locked-layout content slots; user-added objects are normal `[data-slide-object][data-oid]` objects.
+Interaction baseline: ported decks must use the same Swiss/reference editor chrome and object editor as `examples/editable-deck-reference.html` / `swiss-modern.html`. Use full component editing for a normal editable deliverable; retain locked-layout slots only when the user explicitly chooses content-only editing or maximum upstream layout fidelity.
 
 **Important interaction contract:** `data-edit-slot` is editable content, not a draggable component. In edit mode the user can click slot text/images to change their content with RTE/Undo/Redo/Save/Export, but the upstream template's layout grid, card geometry, decorative layers, and spacing stay locked. Only user-added objects in `.slide-edit-layer` become selectable, draggable, resizable components. Do not promise that every native template child will get object handles unless a separate componentization mode is explicitly requested and implemented.
 
 Template edit modes:
 
-- `data-template-edit-mode="slots"` is the default. It is template-safe: authored content is editable through slots, while layout and decoration remain locked.
-- `data-template-edit-mode="components"` is an optional generated mode for semantic blocks that can be represented as `[data-slide-object]`.
+- `data-template-edit-mode="components"` is the default for the skill's full editable runtime and whenever the user says “每个元素都能改”, “像 PPT 一样”, “可拖动/缩放”, or equivalent. Promote authored semantic blocks to `[data-slide-object][data-oid]` on load.
+- `data-template-edit-mode="slots"` is the content-only fallback. Use it only when the user explicitly prioritizes locked template geometry over object-level layout editing.
 - In delivered ported decks, **Unlock layout** componentizes the current slide on demand by moving/wrapping the original editable slot nodes into `.slide-edit-layer`. It must preserve the original element tag, classes, and computed typography, must not create duplicate content copies, and must be undoable back to the original layout position.
 - Never componentize every DOM node. Exclude backgrounds, grids, axes, ticks, decorative marks, texture/glitch layers, SVG paths, animation wrappers, and pure layout containers.
 
 When using or extending a ported preset:
 
 1. Treat the matching `beautiful-html-templates/templates/{source_slug}/template.html` as the visual system: preserve fonts, CSS variables, slide-level classes, layout grid, decorative DOM, and component grammar.
-2. Edit authored content through slots, not by decomposing the template into draggable boxes. Use:
+2. In `slots` mode, edit authored content through slots. Use:
    - `data-edit-slot`
    - `data-slot-type="text|image|metric|table-cell"`
    - `data-slot-label`
@@ -54,6 +54,19 @@ When using or extending a ported preset:
 4. Preserve `.slide-edit-layer` for user-added freeform objects. Added objects can use `[data-slide-object][data-oid]` and the normal Swiss drag/resize/multi-select runtime; native template slots use the Swiss RTE/Undo/Redo/Save/Export path but do not get move/resize handles.
 5. If a needed slide type is missing, design a new slide in the same template system: same fonts, palette, spacing rhythm, chrome, and component grammar. Do not mix in another template's visual language.
 </template_ports>
+
+<direct_component_editing>
+PPT-like direct component editing (required for full editable runtime)
+
+Read [component-edit-mode.md](component-edit-mode.md) before generating or enhancing a deck that uses `data-template-edit-mode="components"`.
+
+- Split all meaningful authored content into independent objects: text, metrics, cards, frames, icons, content shapes, images, videos, chart labels, chart values, and value boxes. Keep only true canvas structure locked: full-slide backgrounds, layout grids, axes/ticks, SVG internals, textures, and animation wrappers.
+- Capture all source geometry before moving any node into `.slide-edit-layer`; then apply wrappers. Never componentize sequentially while measuring, and never create duplicate visible copies.
+- Keep **Edit** and **Pages** visible without hover discovery. Let **E** toggle edit mode and let double-clicking any authored object enter edit mode and select it. In edit mode, click text to type, drag **⠿** to move, drag edge/corner handles to resize, and use **×** to delete.
+- Do not automatically open the Pages sidebar when entering edit mode. Keep explicit previous/next buttons, arrow-key navigation, and the current/total page counter usable while editing.
+- Give every slide a coherent entrance motion and replay only the current slide's motion after navigation. Pause all motion while editing and honor `prefers-reduced-motion`.
+- Keep data-driven graphics linked: editing a chart number must recompute the corresponding bar/line/label. Export the current edited state as a standalone self-contained HTML file.
+</direct_component_editing>
 
 <discovery_gate>
 Discovery gate (do not skip)
@@ -70,7 +83,7 @@ Models often jump straight to generating HTML. **For Mode A (new deck) and Mode 
 | 2 | **Length** | **Slide-count band** (e.g. short 5–10 / medium 10–20 / long 20+) **or** exact count — never inferred from topic alone |
 | 3 | **Content** | Pasted outline, bullets, draft copy, **or** named source + extract scope (e.g. “README §X–Y only”); not “a theme” alone |
 | 4 | **Style direction** | Phase 1 style preference cluster **or** a **named** preset from [STYLE_PRESETS.md](STYLE_PRESETS.md) **or** explicit delegation (“you choose”) — if only “you choose”, **Phase 2** still runs to narrow via recommendations/previews unless the user also explicitly skips previews |
-| 5 | **Editing** | Confirm **full editable runtime** (this skill’s default) **or** explicit switch to parent **read-only** `frontend-slides` |
+| 5 | **Editing** | Confirm **full component editing** (default: authored elements movable/resizable) **or** content-only locked-template editing **or** explicit switch to parent **read-only** `frontend-slides` |
 | 6 | **Images** | No / yes / unsure; if **yes**, files may arrive later, but intent is explicit |
 | 7 | **Mobile** | Required answer: **Desktop-first only** (default) or **Adapt for phone portrait + landscape**; do not infer this silently |
 | — | **Language / locale** | When prose is audience-facing and not already stated: monolingual / bilingual / per-locale files — **ask in Phase 1** |
@@ -206,7 +219,7 @@ What visual direction sounds closest as a starting point? Options:
 - "I already know the preset" — skip to a direct preset choice
 
 **Question 5 — Editing scope** (header: "Editing"):
-Confirm the user wants the **full editable runtime** (default for this skill): object layout, Pages sidebar, undo/redo. If they explicitly want a **minimal read-only** file only, switch to the parent **frontend-slides** skill instead — do not strip the runtime from this skill arbitrarily.
+Confirm the user wants the **full component-editable runtime** (default for this skill): authored semantic elements are independently selectable, movable, resizable, and editable; Pages, undo/redo, page motion, save, and export remain available. Offer content-only locked-template editing only when maximum template geometry fidelity matters. If they explicitly want a **minimal read-only** file, switch to the parent **frontend-slides** skill.
 
 **Question 6 — Assets / images** (header: "Images"):
 Will this deck use image files you will provide (folder, uploads, or links)? Options: **No images** (CSS/graphics only) / **Yes — I will provide images** / **Unsure — recommend**
@@ -327,6 +340,7 @@ If images were provided, the slide outline already incorporates them from Step 1
 **Before generating, read these supporting files:**
 - [STYLE_PRESETS.md](STYLE_PRESETS.md) — **Authoritative visual spec** for the chosen preset (layout, signature, fonts, colors) — same role as in parent `frontend-slides`
 - [editor-runtime.md](editor-runtime.md) — **DOM contract** (`data-slide-object`, `data-oid`, edit layer), history types, snap rules, generator checklist
+- [component-edit-mode.md](component-edit-mode.md) — full componentization, persistent edit UI, page-turn controls, per-slide motion, and linked chart behavior
 - [examples/editable-deck-reference.html](examples/editable-deck-reference.html) — **Copy the deck runtime** (editor + sidebar + history + persistence patterns); **do not** treat its slide markup as the only allowed layout
 - [html-template.md](html-template.md) — HTML architecture and integration notes
 - [viewport-base.css](viewport-base.css) — Mandatory CSS (include in full)
@@ -340,6 +354,7 @@ If images were provided, the slide outline already incorporates them from Step 1
 - **Preset fidelity:** Implement **Layout** and **Signature Elements** from [STYLE_PRESETS.md](STYLE_PRESETS.md) for the selected style. Vary structure slide-to-slide and preset-to-preset; avoid a **single repeated title-slide prototype** across all aesthetics (parent skill does not do that).
 - **Ported preset fidelity:** For the 34 ported presets, preserve the upstream template DOM/CSS/classes and make authored content slot-editable. Prefer locked native layout + editable `data-edit-slot` content over making every native element draggable.
 - **Every slide** `section.slide` must have a stable `id`; movable content lives in `.slide-edit-layer` as `[data-slide-object][data-oid]` per [editor-runtime.md](editor-runtime.md)
+- For full editing, set `data-template-edit-mode="components"`, componentize authored semantic elements at load, keep Edit/Pages persistently visible, support double-click direct editing, and keep previous/next navigation usable in edit mode.
 - **Deck slide list:** Never use a global `querySelectorAll('section.slide')` when a filmstrip clones slides — use only slides under the deck wrapper (e.g. `.slides-offset` + `:scope > section.slide`). See [html-template.md](html-template.md) §Regression guard.
 - **Mobile adaptation:** If Phase 1 selected phone support, set `data-mobile-adaptation="enabled"` on `<html>` and include portrait + landscape media rules for the deck chrome, sidebar, and slide objects. If not selected, set `data-mobile-adaptation="desktop-default"` so validation can distinguish an explicit desktop-first choice from an omitted decision.
 - Embed the **editable deck runtime** (from the reference example): `SlideDeck`, object editor (select / drag / snap / RTE toolbar), `SlideSidebar`, `HistoryStack`, save/export
@@ -385,19 +400,19 @@ When converting **PowerPoint** (`.pptx`) or **PDF** (`.pdf`) files:
 Phase 5: Delivery
 
 1. **Clean up** — Delete the temporary slide-previews folder (see Phase 2) if it exists
-2. **Smoke check (quick)** — Before handing off: open the file once; confirm **no in-slide scrolling** at ~1280×720; if mobile support was selected, also check ~390×844 portrait and ~844×390 landscape; in edit mode, open **Pages**, reorder one slide, **Copy** one slide, add **+New Page**, and refresh — **no duplicate slides or object ids** (regression guard); **Export HTML** opens and runs standalone
+2. **Smoke check (quick)** — Before handing off: open the file once; confirm **no in-slide scrolling** at ~1280×720; if mobile support was selected, also check ~390×844 portrait and ~844×390 landscape. For full component mode, verify a title can be edited, a graphic can be selected, one object can move/resize, edit mode can turn pages, double-click enters editing, every slide has motion, and linked chart values update graphics. Then open **Pages**, reorder one slide, **Copy** one slide, add **+New Page**, and refresh — **no duplicate slides or object ids**; **Export HTML** opens and runs standalone.
 3. **Open** — Launch in default browser: **macOS** `open [filename].html`; **Linux** `xdg-open [filename].html`; **Windows** `start [filename].html`
 4. **Summarize** — Tell the user:
    - File location, style name, slide count
    - Navigation: Arrow keys, Space, scroll/wheel (wheel disabled while edit mode on), click nav dots
    - **Presentation tools:** **Hover the top-left** to reveal **Laser** and **Fullscreen**. **Laser** shows a single laser **dot** that follows the pointer (the trailing-stroke effect was removed by design — no trail nodes are created); **Esc** turns it off, and entering edit mode closes it automatically. **Fullscreen** uses the browser Fullscreen API.
-   - **Edit mode:** `E` enters edit mode. **Hover the top-left** to reveal **Edit**, **Pages**, and (while editing) **Undo** / **Redo** / **Done**; controls hide after the pointer leaves (~400ms). **Done** (same cluster) exits edit mode — the **Edit** button label stays **Edit**. **Esc** blurs text first, then exits edit mode when not typing in a text box
+   - **Edit mode:** **Edit** and **Pages** stay visible. `E` toggles edit mode; double-clicking an authored object enters edit mode and selects it. Editing does not automatically open Pages. **Undo** / **Redo** / **Done** stay visible while editing. **Esc** blurs text first, then exits edit mode when not typing in a text box.
    - **Pages** sidebar for thumbnails, reorder (drag rows), hover **Copy** on a thumbnail to duplicate that page, delete slides, and use **+New Page** beside **Export HTML** to insert a blank style-matched page after the current slide
    - **Objects:** drag **⠿** to move; hover **×** on an object or use **Delete/Backspace** to remove (multi-select confirms in English); drag **corner resize** on selected objects to change width/height (text reflows); **Ctrl+click** multi-select (macOS: **Control** key)
    - **Add element:** **Add element** (top-left with Edit/Pages in edit mode) opens a menu: **Text**, **Image** (local file, paste, or placeholder), **Video** (local file + controls); added media is embedded as data URLs so exported decks travel as one file
    - **Snap:** aligns to **slide center** and **other objects** — not to the outer slide edges
    - **Text:** click text to type; floating toolbar: **B/I** plus **Font** · **Scale** · **Px** drawers (click to expand cards for families, scale steps, px presets + custom); **Ctrl+Z** / **Ctrl+Y** or **Ctrl+Shift+Z**; **Cmd+Z** / **Cmd+Y** / **Cmd+Shift+Z** on macOS when not typing in `contenteditable`
-   - **Save** (`#btnSave`, top-left next to **Edit** / **Pages** when editing — same hover reveal) or **Ctrl+S** / **Cmd+S** stores a browser draft in localStorage and writes a portable HTML file when the browser supports File System Access; otherwise it downloads an updated HTML fallback. **Export HTML** remains in the Pages sidebar and must embed the current deck state plus media into the exported file while stripping transient edit state. The exported file is **portable, single-file, self-contained (no external font links), and trail-free** — it carries the latest edits and keeps Laser/Fullscreen working, but never embeds active laser state.
+   - **Save** (`#btnSave`, persistently visible next to **Edit** / **Pages** while editing) or **Ctrl+S** / **Cmd+S** stores a browser draft in localStorage and writes a portable HTML file when the browser supports File System Access; otherwise it downloads an updated HTML fallback. **Export HTML** remains in the Pages sidebar and must embed the current deck state plus media into the exported file while stripping transient edit state. The exported file is **portable, single-file, self-contained (no external font links), and trail-free** — it carries the latest edits and keeps Laser/Fullscreen working, but never embeds active laser state.
    - How to customize: slide theme `:root` variables, **`--deck-chrome-*`** for edit UI (see [STYLE_PRESETS.md](STYLE_PRESETS.md) §Deck chrome tokens), fonts (inline Latin webfonts as base64 `@font-face` or layered system stacks, and a native CJK stack — see Phase 3 §Fonts & portability; the export stays self-contained with no external font links), `.reveal` animations; keep `data-oid` unique when adding objects
 </success_criteria>
 
@@ -407,6 +422,7 @@ Supporting Files
 | File | Purpose | When to Read |
 |------|---------|-------------|
 | [editor-runtime.md](editor-runtime.md) | DOM contract, undo types, snap rules, generator checklist | Phase 3 (before codegen) |
+| [component-edit-mode.md](component-edit-mode.md) | Full componentization, persistent edit UI, page motion/navigation, linked charts, QA | Phase 3 for full editing or Mode C upgrades |
 | [examples/editable-deck-reference.html](examples/editable-deck-reference.html) | Working reference: full runtime in one file | Phase 3 (copy/adapt JS/CSS) |
 | [STYLE_PRESETS.md](STYLE_PRESETS.md) | 46 curated visual presets with colors, fonts, and signature elements | Phase 2 (style selection) |
 | [viewport-base.css](viewport-base.css) | Mandatory responsive CSS — copy into every presentation | Phase 3 (generation) |
